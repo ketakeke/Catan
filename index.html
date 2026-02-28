@@ -47,6 +47,11 @@ body{background:#1a1a2e;color:#eee;font-family:'Segoe UI','Hiragino Sans',sans-s
 .trade-row{display:flex;align-items:center;gap:6px;margin:4px 0;}
 .trade-row input{width:40px;text-align:center;background:#333;color:#fff;border:1px solid #555;border-radius:3px;padding:2px;}
 select{background:#333;color:#fff;border:1px solid #555;border-radius:3px;padding:3px;}
+
+#zoom-controls{position:absolute;bottom:4px;right:4px;z-index:10;display:flex;flex-direction:column;gap:4px;}
+.zoom-btn{width:36px;height:36px;background:rgba(20,20,40,0.92);border:1px solid #555;border-radius:6px;color:#eee;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
+.zoom-btn:hover{background:rgba(60,60,80,0.95);border-color:#888;}
+#zoom-level{text-align:center;font-size:10px;color:#aaa;background:rgba(20,20,40,0.92);border:1px solid #555;border-radius:4px;padding:2px 0;}
 </style>
 </head>
 <body>
@@ -82,6 +87,13 @@ select{background:#333;color:#fff;border:1px solid #555;border-radius:3px;paddin
   <div id="discard-modal" class="panel"></div>
   <div id="steal-modal" class="panel"></div>
   <div id="tooltip"></div>
+<div id="zoom-controls">
+  <button class="zoom-btn" id="zoom-in-btn" title="拡大">＋</button>
+  <div id="zoom-level">100%</div>
+  <button class="zoom-btn" id="zoom-out-btn" title="縮小">－</button>
+  <button class="zoom-btn" id="zoom-reset-btn" title="リセット" style="font-size:13px;">⟳</button>
+</div>
+
 </div>
 <script>
 // ============================================================
@@ -1266,7 +1278,9 @@ class CatanAI {
 
 // === UI & RENDERING ===
 let offsetX=0,offsetY=0;
+let scale=1;
 let isDragging=false,dragStartX=0,dragStartY=0;
+const MIN_SCALE=0.4,MAX_SCALE=2.5;
 
 function initCanvas(){
   canvas=document.getElementById('gameCanvas');
@@ -1288,8 +1302,8 @@ function resize(){
     for(let c of game.grid.hexCenters){cx+=c.x;cy+=c.y;}
     cx/=game.grid.hexCenters.length;
     cy/=game.grid.hexCenters.length;
-    offsetX=W/2-cx-80;
-    offsetY=H/2-cy;
+    offsetX=W/2-cx*scale-80;
+    offsetY=H/2-cy*scale;
   }
   render();
 }
@@ -1300,6 +1314,7 @@ function render(){
 
   ctx.save();
   ctx.translate(offsetX,offsetY);
+  ctx.scale(scale,scale);
 
   drawOcean();
   drawHexes();
@@ -1679,7 +1694,7 @@ function clearActions(){
 
 // === MOUSE/TOUCH HANDLING ===
 function getGamePos(clientX,clientY){
-  return {x:clientX-offsetX,y:clientY-offsetY};
+  return {x:(clientX-offsetX)/scale,y:(clientY-offsetY)/scale};
 }
 
 function findNearestVertex(gx,gy,maxDist=18){
@@ -1715,7 +1730,79 @@ function findHex(gx,gy){
 }
 
 canvas=document.getElementById('gameCanvas');
+// === ズーム & パン ===
+function applyZoom(newScale,pivotX,pivotY){
+  newScale=Math.max(MIN_SCALE,Math.min(MAX_SCALE,newScale));
+  offsetX=pivotX-(pivotX-offsetX)*(newScale/scale);
+  offsetY=pivotY-(pivotY-offsetY)*(newScale/scale);
+  scale=newScale;
+  render();
+  const zlEl=document.getElementById('zoom-level');
+  if(zlEl) zlEl.textContent=Math.round(scale*100)+'%';
+}
+
+canvas.addEventListener('wheel',(e)=>{
+  e.preventDefault();
+  const delta=e.deltaY>0?0.9:1.1;
+  applyZoom(scale*delta,e.clientX,e.clientY);
+},{passive:false});
+
+canvas.addEventListener('mousedown',(e)=>{
+  if(e.button===1||(e.button===0&&e.altKey)){
+    isDragging=true;
+    dragStartX=e.clientX-offsetX;
+    dragStartY=e.clientY-offsetY;
+    canvas.style.cursor='grabbing';
+    e.preventDefault();
+  }
+});
+
+canvas.addEventListener('mouseup',()=>{
+  if(isDragging){isDragging=false;canvas.style.cursor='';}
+});
+
+canvas.addEventListener('mouseleave',()=>{
+  if(isDragging){isDragging=false;canvas.style.cursor='';}
+});
+
+let touchStartDist=0,touchStartScale=1,touchStartMidX=0,touchStartMidY=0;
+let touchStartOffsetX=0,touchStartOffsetY=0;
+canvas.addEventListener('touchstart',(e)=>{
+  if(e.touches.length===2){
+    e.preventDefault();
+    const dx=e.touches[0].clientX-e.touches[1].clientX;
+    const dy=e.touches[0].clientY-e.touches[1].clientY;
+    touchStartDist=Math.sqrt(dx*dx+dy*dy);
+    touchStartScale=scale;
+    touchStartMidX=(e.touches[0].clientX+e.touches[1].clientX)/2;
+    touchStartMidY=(e.touches[0].clientY+e.touches[1].clientY)/2;
+    touchStartOffsetX=offsetX;touchStartOffsetY=offsetY;
+  }
+},{passive:false});
+canvas.addEventListener('touchmove',(e)=>{
+  if(e.touches.length===2){
+    e.preventDefault();
+    const dx=e.touches[0].clientX-e.touches[1].clientX;
+    const dy=e.touches[0].clientY-e.touches[1].clientY;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    const newScale=Math.max(MIN_SCALE,Math.min(MAX_SCALE,touchStartScale*(dist/touchStartDist)));
+    const midX=(e.touches[0].clientX+e.touches[1].clientX)/2;
+    const midY=(e.touches[0].clientY+e.touches[1].clientY)/2;
+    offsetX=midX-(touchStartMidX-touchStartOffsetX)*(newScale/touchStartScale);
+    offsetY=midY-(touchStartMidY-touchStartOffsetY)*(newScale/touchStartScale);
+    scale=newScale;render();
+    const zlEl=document.getElementById('zoom-level');
+    if(zlEl) zlEl.textContent=Math.round(scale*100)+'%';
+  }
+},{passive:false});
+
 canvas.addEventListener('mousemove',(e)=>{
+  if(isDragging){
+    offsetX=e.clientX-dragStartX;
+    offsetY=e.clientY-dragStartY;
+    render();
+    return;
+  }
   if(!game) return;
   let gp=getGamePos(e.clientX,e.clientY);
   hoverVertex=findNearestVertex(gp.x,gp.y);
@@ -2360,6 +2447,26 @@ function init(){
     startGame();
   });
 
+
+  // ズームボタン
+  document.getElementById('zoom-in-btn').addEventListener('click',()=>{
+    applyZoom(scale*1.2,W/2,H/2);
+  });
+  document.getElementById('zoom-out-btn').addEventListener('click',()=>{
+    applyZoom(scale/1.2,W/2,H/2);
+  });
+  document.getElementById('zoom-reset-btn').addEventListener('click',()=>{
+    scale=1;
+    if(game){
+      let cx=0,cy=0;
+      for(let c of game.grid.hexCenters){cx+=c.x;cy+=c.y;}
+      cx/=game.grid.hexCenters.length;cy/=game.grid.hexCenters.length;
+      offsetX=W/2-cx*scale-80;offsetY=H/2-cy*scale;
+    }
+    const zlEl=document.getElementById('zoom-level');
+    if(zlEl) zlEl.textContent='100%';
+    render();
+  });
   // Render loop
   function loop(){
     render();
