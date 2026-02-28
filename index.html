@@ -123,12 +123,12 @@ let tooltipEl,messageLogEl;
 
 // === HEX GEOMETRY ===
 const HEX_SIZE=46;
-const HEX_LAYOUT=[ // axial coordinates for standard Catan board (q,r)
-  [-2,0],[-2,1],[-2,2],
-  [-1,-1],[-1,0],[-1,1],[-1,2],
-  [0,-2],[0,-1],[0,0],[0,1],[0,2],
-  [1,-2],[1,-1],[1,0],[1,1],
-  [2,-2],[2,-1],[2,0]
+const HEX_LAYOUT=[
+  [0,-2],[1,-2],[2,-2],
+  [-1,-1],[0,-1],[1,-1],[2,-1],
+  [-2,0],[-1,0],[0,0],[1,0],[2,0],
+  [-2,1],[-1,1],[0,1],[1,1],
+  [-2,2],[-1,2],[0,2]
 ];
 // Standard number token distribution (excluding desert)
 const NUMBER_TOKENS=[2,3,3,4,4,5,5,6,6,8,8,9,9,10,10,11,11,12];
@@ -190,8 +190,8 @@ class HexGrid {
   }
 
   getSpiralOrder(){
-    // Simple: use ring order
-    return [9,  8,3,4,10,15,14,  7,0,1,5,11,16,18,17,13,  12,2,6];
+    // Outer ring clockwise from top, then inner ring, then center
+    return [0,1,2,6,11,15,18,17,16,12,7,3, 4,5,10,14,13,8, 9];
   }
 
   fixRedNumbers(){
@@ -239,8 +239,8 @@ class HexGrid {
   computePositions(){
     this.hexCenters=[];
     for(let h of this.hexes){
-      let x=HEX_SIZE*1.5*h.q;
-      let y=HEX_SIZE*Math.sqrt(3)*(h.r+h.q/2);
+      let x=HEX_SIZE*Math.sqrt(3)*(h.q+h.r/2);
+      let y=HEX_SIZE*1.5*h.r;
       this.hexCenters.push({x,y});
     }
   }
