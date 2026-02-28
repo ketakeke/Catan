@@ -913,13 +913,14 @@ class CatanAI {
       }
     }
 
-    // Roll dice
+    // Roll dice with short animation
     let total=g.rollDice();
+    await animateDiceRoll(g.diceRoll[0], g.diceRoll[1]);
     updateDiceDisplay();
     g.log(`${this.pl.name}がサイコロを振った: ${g.diceRoll[0]}+${g.diceRoll[1]}=${total}`);
-    await sleep(500);
 
     if(total===7){
+      await animateRobberAlert();
       // Discard phase for all players with >7 cards
       await this.handleSevenRoll();
       // Move robber
@@ -1308,6 +1309,319 @@ function resize(){
   render();
 }
 
+
+// === ANIMATION SYSTEM ===
+let animations = []; // {type, startTime, duration, data}
+let diceAnimating = false;
+
+function addAnimation(type, duration, data={}) {
+  animations.push({type, startTime: performance.now(), duration, data});
+}
+
+function drawAnimations() {
+  const now = performance.now();
+  animations = animations.filter(a => now - a.startTime < a.duration);
+  for(const a of animations) {
+    const t = (now - a.startTime) / a.duration; // 0→1
+    drawAnimation(a, t);
+  }
+}
+
+function drawAnimation(a, t) {
+  const {type, data} = a;
+  ctx.save();
+
+  if(type === 'flash') {
+    // Full screen color flash
+    const alpha = (1-t) * data.alpha;
+    ctx.fillStyle = data.color.replace(')',','+alpha+')').replace('rgb','rgba');
+    ctx.fillRect(0, 0, W, H);
+
+  } else if(type === 'bigText') {
+    // Big text appearing and fading in center
+    const scale2 = t < 0.2 ? t/0.2 : t < 0.7 ? 1 : (1-t)/0.3;
+    const alpha = t < 0.1 ? t/0.1 : t > 0.8 ? (1-t)/0.2 : 1;
+    ctx.save();
+    ctx.translate(W/2, H/2 + data.yOff || 0);
+    ctx.scale(scale2, scale2);
+    ctx.globalAlpha = alpha;
+    ctx.font = `bold ${data.size||80}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Shadow
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = data.color || '#fff';
+    ctx.fillText(data.text, 0, 0);
+    ctx.restore();
+
+  } else if(type === 'particles') {
+    // Particle burst from a point
+    for(const p of data.particles) {
+      const px = p.x + p.vx * t * data.duration/1000;
+      const py = p.y + p.vy * t * data.duration/1000 + 0.5 * 300 * (t*data.duration/1000)**2;
+      const alpha = 1 - t;
+      const size = p.size * (1-t*0.5);
+      ctx.beginPath();
+      ctx.arc(px, py, size, 0, Math.PI*2);
+      ctx.fillStyle = p.color.replace('rgb','rgba').replace(')',','+alpha+')');
+      ctx.fill();
+    }
+
+  } else if(type === 'diceRoll') {
+    // Animated dice on screen
+    const {d1Final, d2Final} = data;
+    const d1Show = t < 0.85 ? Math.floor(Math.random()*6)+1 : d1Final;
+    const d2Show = t < 0.85 ? Math.floor(Math.random()*6)+1 : d2Final;
+    
+    const cx = W/2, cy = H/2;
+    const s = 70 + Math.sin(t*Math.PI*8) * (1-t) * 20; // wobble size
+    const angle = (1-t) * Math.PI * 4; // spin
+
+    [[-90, d1Show], [90, d2Show]].forEach(([xOff, val]) => {
+      ctx.save();
+      ctx.translate(cx + xOff, cy);
+      ctx.rotate(angle * (xOff>0 ? 1 : -1));
+      // Die face
+      const r = 12;
+      ctx.beginPath();
+      ctx.roundRect(-s/2, -s/2, s, s, r);
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 15;
+      ctx.fill();
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Number
+      ctx.fillStyle = '#111';
+      ctx.font = `bold ${s*0.55}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(val, 0, 0);
+      ctx.restore();
+    });
+
+    // Total (appears at end)
+    if(t > 0.8) {
+      const totalAlpha = (t-0.8)/0.2;
+      ctx.globalAlpha = totalAlpha;
+      ctx.font = 'bold 36px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = (d1Final+d2Final===7) ? '#f44' : '#ff8';
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 10;
+      ctx.fillText('合計: '+(d1Final+d2Final), cx, cy+70);
+      ctx.globalAlpha = 1;
+    }
+
+  } else if(type === 'robberAlert') {
+    // Red vignette + text
+    const pulse = 0.5 + Math.sin(t*Math.PI*6)*0.5;
+    const alpha = (1-t) * 0.5 * pulse;
+    // Vignette
+    let grd = ctx.createRadialGradient(W/2, H/2, H*0.2, W/2, H/2, H*0.8);
+    grd.addColorStop(0, 'rgba(200,0,0,0)');
+    grd.addColorStop(1, `rgba(200,0,0,${alpha})`);
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, W, H);
+
+  } else if(type === 'sparkle') {
+    // Sparkle at build location
+    for(const sp of data.sparks) {
+      const px = sp.x + sp.vx * t;
+      const py = sp.y + sp.vy * t;
+      const alpha = 1 - t;
+      const size = sp.size * (1 - t);
+      // Star shape
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(sp.angle + t * sp.spin);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = sp.color;
+      ctx.beginPath();
+      for(let i=0;i<5;i++) {
+        const a = (i*2*Math.PI/5) - Math.PI/2;
+        const a2 = a + Math.PI/5;
+        if(i===0) ctx.moveTo(Math.cos(a)*size, Math.sin(a)*size);
+        else ctx.lineTo(Math.cos(a)*size, Math.sin(a)*size);
+        ctx.lineTo(Math.cos(a2)*size*0.4, Math.sin(a2)*size*0.4);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+  } else if(type === 'resourcePop') {
+    // Resource icons floating up
+    for(const r of data.resources) {
+      const py = r.y - t * 80;
+      const alpha = t < 0.7 ? 1 : (1-t)/0.3;
+      const scl = 1 + t*0.5;
+      ctx.save();
+      ctx.translate(r.x, py);
+      ctx.scale(scl, scl);
+      ctx.globalAlpha = alpha;
+      ctx.font = '22px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 5;
+      ctx.fillText(r.icon, 0, 0);
+      if(r.count > 1) {
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillStyle = '#ff8';
+        ctx.fillText('+'+r.count, 16, -10);
+      }
+      ctx.restore();
+    }
+
+  } else if(type === 'fireworks') {
+    // Victory fireworks
+    const numBursts = data.bursts.length;
+    for(const b of data.bursts) {
+      const bt = Math.max(0, Math.min(1, (performance.now() - b.startTime) / b.duration));
+      if(bt >= 1) continue;
+      for(const p of b.particles) {
+        const px = b.x + p.vx * bt * b.duration/1000;
+        const py = b.y + p.vy * bt * b.duration/1000 + 0.5*200*(bt*b.duration/1000)**2;
+        const alpha = 1-bt;
+        ctx.beginPath();
+        ctx.arc(px, py, 3, 0, Math.PI*2);
+        ctx.fillStyle = p.color.replace('rgb','rgba').replace(')',','+alpha+')');
+        ctx.fill();
+      }
+    }
+  }
+
+  ctx.restore();
+}
+
+function makeParticles(x, y, count, colors, speedRange=[50,200], sizeRange=[4,10]) {
+  const particles = [];
+  for(let i=0;i<count;i++) {
+    const angle = Math.random()*Math.PI*2;
+    const speed = speedRange[0] + Math.random()*(speedRange[1]-speedRange[0]);
+    particles.push({
+      x, y,
+      vx: Math.cos(angle)*speed,
+      vy: Math.sin(angle)*speed - 100,
+      size: sizeRange[0] + Math.random()*(sizeRange[1]-sizeRange[0]),
+      color: colors[Math.floor(Math.random()*colors.length)]
+    });
+  }
+  return particles;
+}
+
+function makeSparkles(x, y, count, colors) {
+  const sparks = [];
+  for(let i=0;i<count;i++) {
+    const angle = Math.random()*Math.PI*2;
+    const speed = 30 + Math.random()*120;
+    sparks.push({
+      x, y,
+      vx: Math.cos(angle)*speed,
+      vy: Math.sin(angle)*speed,
+      size: 6 + Math.random()*10,
+      angle: Math.random()*Math.PI*2,
+      spin: (Math.random()-0.5)*10,
+      color: colors[Math.floor(Math.random()*colors.length)]
+    });
+  }
+  return sparks;
+}
+
+// Animated dice roll - returns promise that resolves when done
+function animateDiceRoll(d1, d2) {
+  return new Promise(resolve => {
+    diceAnimating = true;
+    addAnimation('diceRoll', 1800, {d1Final:d1, d2Final:d2});
+    setTimeout(() => {
+      diceAnimating = false;
+      resolve();
+    }, 1900);
+  });
+}
+
+// Robber alert animation
+function animateRobberAlert() {
+  addAnimation('flash', 600, {color:'rgb(200,0,0)', alpha:0.6});
+  addAnimation('bigText', 1500, {text:'⚔ 盗賊！', color:'#f55', size:90, yOff:-40});
+  addAnimation('robberAlert', 2000, {});
+  return new Promise(r => setTimeout(r, 1800));
+}
+
+// Build sparkle at screen coordinates
+function animateBuild(screenX, screenY, type) {
+  const colors = type==='city'
+    ? ['rgb(255,200,0)','rgb(255,150,0)','rgb(255,255,100)']
+    : type==='road'
+    ? ['rgb(150,100,50)','rgb(200,150,80)','rgb(255,200,100)']
+    : ['rgb(100,220,100)','rgb(50,200,50)','rgb(200,255,100)'];
+  const sparks = makeSparkles(screenX, screenY, 18, colors);
+  addAnimation('sparkle', 900, {sparks});
+  addAnimation('bigText', 700, {
+    text: type==='city'?'🏙 都市！':type==='road'?'🛤 街道！':'🏠 開拓地！',
+    color: '#fff', size: 42, yOff: 60
+  });
+}
+
+// Resource gain popup at hex center
+function animateResourceGain(hexCenters, resourceCounts) {
+  const resIcons = ['🧱','🪵','🐑','🌾','⛏'];
+  const resources = [];
+  let xi = 0;
+  for(let ri=0;ri<5;ri++) {
+    if(resourceCounts[ri] > 0) {
+      // Find a hex that produced this
+      const hc = hexCenters[Math.floor(Math.random()*hexCenters.length)];
+      const sx = hc.x * scale + offsetX + (xi-2)*40;
+      const sy = hc.y * scale + offsetY;
+      resources.push({x:sx, y:sy, icon:resIcons[ri], count:resourceCounts[ri]});
+      xi++;
+    }
+  }
+  if(resources.length > 0) {
+    addAnimation('resourcePop', 1200, {resources});
+  }
+}
+
+// Victory fireworks
+function animateVictory(winnerName, isHuman) {
+  addAnimation('bigText', 4000, {
+    text: isHuman ? '🎉 勝利！' : '😔 '+winnerName+'の勝利',
+    color: isHuman ? '#ffe050' : '#aaa',
+    size: 100,
+    yOff: -60
+  });
+  // Continuous fireworks
+  const burstData = {bursts:[]};
+  const makeFireworkBurst = () => {
+    if(animations.find(a=>a.type==='fireworks')) {
+      const x = Math.random()*W;
+      const y = Math.random()*H*0.6;
+      const hue = Math.random()*360;
+      const particles = [];
+      for(let i=0;i<40;i++) {
+        const a = Math.random()*Math.PI*2;
+        const s = 100+Math.random()*200;
+        particles.push({
+          vx:Math.cos(a)*s, vy:Math.sin(a)*s-100,
+          color:`hsl(${hue+Math.random()*60},100%,60%)`
+        });
+      }
+      burstData.bursts.push({x,y,particles,startTime:performance.now(),duration:1200});
+      // Keep at most 8 bursts
+      if(burstData.bursts.length > 8) burstData.bursts.shift();
+    }
+  };
+  addAnimation('fireworks', 5000, burstData);
+  const interval = setInterval(makeFireworkBurst, 400);
+  setTimeout(() => clearInterval(interval), 4500);
+}
+
+
 function render(){
   if(!game) return;
   ctx.clearRect(0,0,W,H);
@@ -1330,6 +1644,7 @@ function render(){
 
   ctx.restore();
 
+  drawAnimations();
   updateUI();
 }
 
@@ -2133,8 +2448,10 @@ async function humanTurn(){
     }
   }
 
-  // Roll dice
+  // Roll dice with animation
+  setActionButtons([]);
   let total=game.rollDice();
+  await animateDiceRoll(game.diceRoll[0], game.diceRoll[1]);
   updateDiceDisplay();
   game.log(`あなたがサイコロを振った: ${game.diceRoll[0]}+${game.diceRoll[1]}=${total}`);
   render();
@@ -2152,9 +2469,18 @@ async function humanTurn(){
       }
     }
     // Human moves robber
+    await animateRobberAlert();
     await humanMoveRobber();
   } else {
+    // Resource gain animation
+    const beforeRes = game.players[0].resources ? {...game.players[0].resources} : null;
     game.distributeResources(total);
+    if(beforeRes) {
+      const gained = [0,0,0,0,0];
+      const keys2 = ['brick','lumber','wool','grain','ore'];
+      for(let ri=0;ri<5;ri++) gained[ri] = game.players[0].resources[keys2[ri]] - (beforeRes[keys2[ri]]||0);
+      if(gained.some(g=>g>0)) animateResourceGain(game.grid.hexCenters, gained);
+    }
   }
 
   render();
@@ -2204,6 +2530,10 @@ async function humanBuildPhase(){
       if(click.type==='edge'){
         game.payCost(0,COST.ROAD);
         game.placeRoad(0,click.idx);
+        const edge=game.grid.edges[click.idx];
+        const v1=game.grid.vertices[edge.v1], v2=game.grid.vertices[edge.v2];
+        const emx=(v1.x+v2.x)/2, emy=(v1.y+v2.y)/2;
+        animateBuild(emx*scale+offsetX, emy*scale+offsetY, 'road');
       }
     }
     if(action==='build-settlement'){
@@ -2213,6 +2543,8 @@ async function humanBuildPhase(){
       if(click.type==='vertex'){
         game.payCost(0,COST.SETTLEMENT);
         game.placeSettlement(0,click.idx);
+        const vc=game.grid.vertices[click.idx];
+        animateBuild(vc.x*scale+offsetX, vc.y*scale+offsetY, 'settlement');
       }
     }
     if(action==='build-city'){
@@ -2222,6 +2554,8 @@ async function humanBuildPhase(){
       if(click.type==='vertex'){
         game.payCost(0,COST.CITY);
         game.placeCity(0,click.idx);
+        const vc2=game.grid.vertices[click.idx];
+        animateBuild(vc2.x*scale+offsetX, vc2.y*scale+offsetY, 'city');
       }
     }
     if(action==='buy-dev'){
@@ -2530,7 +2864,9 @@ function resolveAction(action){
 }
 
 function showGameOver(){
-  setStatus(game.winner===0?'🎉 あなたの勝利！':'😔 '+game.players[game.winner].name+'の勝利...');
+  const isHuman = game.winner===0;
+  setStatus(isHuman?'🎉 あなたの勝利！':'😔 '+game.players[game.winner].name+'の勝利...');
+  animateVictory(game.players[game.winner].name, isHuman);
   setActionButtons([
     {text:'🔄 もう一度プレイ',onclick:()=>location.reload()},
   ]);
