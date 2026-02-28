@@ -1,0 +1,2374 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>カタン練習アプリ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#1a1a2e;color:#eee;font-family:'Segoe UI','Hiragino Sans',sans-serif;overflow:hidden;user-select:none;}
+#gameCanvas{display:block;}
+#ui-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+#ui-layer>*{pointer-events:auto;}
+.panel{background:rgba(20,20,40,0.92);border:1px solid #444;border-radius:8px;padding:10px;}
+.btn{background:#2a6;color:#fff;border:none;border-radius:5px;padding:6px 14px;cursor:pointer;font-size:13px;margin:2px;transition:background 0.15s;}
+.btn:hover{background:#3b7;}
+.btn:disabled{background:#555;color:#999;cursor:default;}
+.btn-danger{background:#a33;}
+.btn-danger:hover{background:#c44;}
+.btn-trade{background:#36a;}
+.btn-trade:hover{background:#47b;}
+.btn-dev{background:#a6a;}
+.btn-dev:hover{background:#b7b;}
+#status-bar{position:absolute;top:0;left:0;right:0;height:38px;background:rgba(10,10,30,0.95);display:flex;align-items:center;padding:0 10px;font-size:13px;border-bottom:1px solid #333;z-index:10;}
+#player-panels{position:absolute;top:42px;right:4px;width:185px;z-index:5;}
+.player-panel{margin-bottom:4px;padding:8px;font-size:11px;border-left:4px solid #888;}
+.player-panel.active{border-color:#ff0;box-shadow:0 0 8px rgba(255,255,0,0.3);}
+.player-panel .name{font-weight:bold;font-size:13px;}
+.player-panel .vp{font-size:15px;font-weight:bold;float:right;}
+.res-row{display:flex;gap:3px;margin-top:3px;flex-wrap:wrap;}
+.res-badge{padding:1px 5px;border-radius:3px;font-size:10px;font-weight:bold;}
+#action-panel{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:4px;flex-wrap:wrap;justify-content:center;max-width:700px;}
+#dice-display{position:absolute;top:42px;left:4px;z-index:5;text-align:center;}
+.dice{display:inline-block;width:44px;height:44px;background:#fff;color:#222;border-radius:8px;font-size:24px;font-weight:bold;line-height:44px;text-align:center;margin:2px;box-shadow:2px 2px 6px rgba(0,0,0,0.5);}
+#resource-panel{position:absolute;bottom:52px;left:4px;z-index:5;width:180px;}
+#trade-modal,#robber-modal,#monopoly-modal,#yop-modal,#discard-modal,#steal-modal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:50;display:none;min-width:320px;max-width:500px;max-height:80vh;overflow-y:auto;}
+#message-log{position:absolute;bottom:52px;right:4px;width:185px;max-height:200px;overflow-y:auto;z-index:5;font-size:10px;padding:6px;}
+#message-log div{margin-bottom:2px;border-bottom:1px solid #333;padding-bottom:2px;}
+#start-screen{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(10,10,30,0.97);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+#start-screen h1{font-size:48px;color:#e8b930;margin-bottom:10px;text-shadow:2px 2px 8px rgba(0,0,0,0.8);}
+#start-screen h2{font-size:18px;color:#aaa;margin-bottom:30px;}
+.diff-btn{width:200px;padding:12px;margin:4px;font-size:16px;border-radius:8px;cursor:pointer;border:2px solid #555;background:rgba(40,40,60,0.9);color:#eee;transition:all 0.2s;}
+.diff-btn:hover{border-color:#e8b930;background:rgba(60,60,80,0.9);}
+.diff-btn.selected{border-color:#e8b930;background:rgba(80,80,40,0.9);}
+#tooltip{position:absolute;background:rgba(0,0,0,0.9);color:#fff;padding:6px 10px;border-radius:5px;font-size:12px;pointer-events:none;z-index:60;display:none;max-width:250px;}
+.res-icon{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;margin:0 1px;}
+.modal-title{font-size:16px;font-weight:bold;margin-bottom:8px;text-align:center;}
+.trade-row{display:flex;align-items:center;gap:6px;margin:4px 0;}
+.trade-row input{width:40px;text-align:center;background:#333;color:#fff;border:1px solid #555;border-radius:3px;padding:2px;}
+select{background:#333;color:#fff;border:1px solid #555;border-radius:3px;padding:3px;}
+</style>
+</head>
+<body>
+<div id="start-screen">
+  <h1>🏝️ カタン練習アプリ</h1>
+  <h2>Settlers of Catan - Practice Mode</h2>
+  <p style="margin-bottom:20px;color:#ccc;">CPU難易度を選択してください</p>
+  <div id="diff-select">
+    <button class="diff-btn" data-diff="1">⭐ Lv.1 初心者<br><small style="color:#aaa">ランダムに行動</small></button>
+    <button class="diff-btn" data-diff="2">⭐⭐ Lv.2 見習い<br><small style="color:#aaa">基本戦略あり</small></button>
+    <button class="diff-btn selected" data-diff="3">⭐⭐⭐ Lv.3 中級者<br><small style="color:#aaa">バランス型</small></button>
+    <button class="diff-btn" data-diff="4">⭐⭐⭐⭐ Lv.4 上級者<br><small style="color:#aaa">効率重視</small></button>
+    <button class="diff-btn" data-diff="5">⭐⭐⭐⭐⭐ Lv.5 達人<br><small style="color:#aaa">最適手を追求</small></button>
+  </div>
+  <br>
+  <button class="btn" style="font-size:20px;padding:12px 40px;" id="start-btn">ゲーム開始</button>
+</div>
+<canvas id="gameCanvas"></canvas>
+<div id="ui-layer">
+  <div id="status-bar"><span id="status-text">カタン練習アプリ</span></div>
+  <div id="player-panels"></div>
+  <div id="dice-display" class="panel" style="display:none;">
+    <div id="dice-area"><span class="dice" id="d1">?</span><span class="dice" id="d2">?</span></div>
+    <div id="dice-total" style="font-size:12px;margin-top:2px;">合計: -</div>
+  </div>
+  <div id="resource-panel" class="panel" style="display:none;"></div>
+  <div id="action-panel"></div>
+  <div id="message-log" class="panel" style="display:none;"></div>
+  <div id="trade-modal" class="panel"></div>
+  <div id="robber-modal" class="panel"></div>
+  <div id="monopoly-modal" class="panel"></div>
+  <div id="yop-modal" class="panel"></div>
+  <div id="discard-modal" class="panel"></div>
+  <div id="steal-modal" class="panel"></div>
+  <div id="tooltip"></div>
+</div>
+<script>
+// ============================================================
+// カタン完全再現 ブラウザゲーム
+// ============================================================
+window.onerror=(msg,url,line)=>{const e=document.createElement('div');e.style.cssText='position:fixed;top:10px;right:10px;background:red;color:white;padding:10px;z-index:9999;border-radius:5px;font-size:12px;max-width:300px';e.textContent=`エラー: ${msg} (line ${line})`;document.body.appendChild(e);};
+
+// === CONSTANTS ===
+const RES={BRICK:0,LUMBER:1,WOOL:2,GRAIN:3,ORE:4};
+const RES_NAMES=['レンガ','木材','羊毛','小麦','鉱石'];
+const RES_COLORS=['#c44','#2a6','#9c9','#ec3','#88a'];
+const RES_KEYS=['brick','lumber','wool','grain','ore'];
+const TERRAIN={HILLS:0,FOREST:1,PASTURE:2,FIELDS:3,MOUNTAINS:4,DESERT:5};
+const TERRAIN_NAMES=['丘陵','森林','牧草地','畑','山地','砂漠'];
+const TERRAIN_COLORS=['#c47040','#2d7a2d','#7db87d','#d4b840','#8888aa','#d4c890'];
+const TERRAIN_RES=[RES.BRICK,RES.LUMBER,RES.WOOL,RES.GRAIN,RES.ORE,-1];
+const DEV={KNIGHT:0,VP:1,ROAD_BUILD:2,YEAR_PLENTY:3,MONOPOLY:4};
+const DEV_NAMES=['騎士','勝利点','街道建設','収穫','独占'];
+const PLAYER_COLORS=['#e44','#3388ee','#ee8833','#eee'];
+const PLAYER_NAMES=['あなた','CPU-A','CPU-B','CPU-C'];
+const HARBOR_TYPES=[-1,RES.BRICK,RES.LUMBER,RES.WOOL,RES.GRAIN,RES.ORE]; // -1=3:1 generic
+const COST={
+  ROAD:{brick:1,lumber:1,wool:0,grain:0,ore:0},
+  SETTLEMENT:{brick:1,lumber:1,wool:1,grain:1,ore:0},
+  CITY:{brick:0,lumber:0,wool:0,grain:2,ore:3},
+  DEV_CARD:{brick:0,lumber:0,wool:1,grain:1,ore:1}
+};
+
+// === GLOBALS ===
+let canvas,ctx,W,H;
+let game=null;
+let cpuDifficulty=3;
+let animFrame=null;
+let selectedDiff=3;
+let hoverVertex=-1,hoverEdge=-1,hoverHex=-1;
+let buildMode=null; // 'road','settlement','city',null
+let pendingAction=null;
+let tooltipEl,messageLogEl;
+
+// === HEX GEOMETRY ===
+const HEX_SIZE=46;
+const HEX_LAYOUT=[ // axial coordinates for standard Catan board (q,r)
+  [-2,0],[-2,1],[-2,2],
+  [-1,-1],[-1,0],[-1,1],[-1,2],
+  [0,-2],[0,-1],[0,0],[0,1],[0,2],
+  [1,-2],[1,-1],[1,0],[1,1],
+  [2,-2],[2,-1],[2,0]
+];
+// Standard number token distribution (excluding desert)
+const NUMBER_TOKENS=[2,3,3,4,4,5,5,6,6,8,8,9,9,10,10,11,11,12];
+// Terrain distribution: 3 hills,4 forest,4 pasture,4 fields,3 mountains,1 desert
+const TERRAIN_DIST=[0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,5];
+
+// Harbor definitions: each harbor connects to 2 vertices, has a type
+// We'll define harbors by their edge positions on the coast
+const HARBOR_DEFS=[ // [hexIndex, edge0, edge1, type] - will be computed
+  {type:-1},{type:-1},{type:-1},{type:-1},
+  {type:RES.BRICK},{type:RES.LUMBER},{type:RES.WOOL},{type:RES.GRAIN},{type:RES.ORE}
+];
+
+class HexGrid {
+  constructor(){
+    this.hexes=[]; // {q,r,terrain,number,hasRobber}
+    this.vertices=[]; // {x,y,building:null,player:-1,harbor:-2} harbor: -2=none,-1=3:1, 0-4=resource
+    this.edges=[]; // {v1,v2,road:false,player:-1}
+    this.hexCenters=[]; // pixel positions
+    this.robberHex=-1;
+  }
+
+  generate(){
+    // Shuffle terrains
+    let terrains=shuffle([...TERRAIN_DIST]);
+    let numbers=[...NUMBER_TOKENS];
+    shuffle(numbers);
+
+    // Place hexes
+    let desertIdx=-1;
+    for(let i=0;i<19;i++){
+      let [q,r]=HEX_LAYOUT[i];
+      let t=terrains[i];
+      let n=0;
+      if(t===TERRAIN.DESERT){
+        desertIdx=i;
+      }
+      this.hexes.push({q,r,terrain:t,number:0,hasRobber:t===TERRAIN.DESERT,idx:i});
+    }
+    // Assign numbers (skip desert)
+    // Use spiral order to avoid 6&8 adjacent (best effort)
+    let numIdx=0;
+    let hexOrder=this.getSpiralOrder();
+    for(let hi of hexOrder){
+      if(this.hexes[hi].terrain===TERRAIN.DESERT) continue;
+      this.hexes[hi].number=numbers[numIdx++];
+    }
+    // Check and fix 6/8 adjacency
+    this.fixRedNumbers();
+
+    this.robberHex=desertIdx;
+
+    // Compute pixel positions
+    this.computePositions();
+    // Build vertices and edges
+    this.buildGraph();
+    // Assign harbors
+    this.assignHarbors();
+  }
+
+  getSpiralOrder(){
+    // Simple: use ring order
+    return [9,  8,3,4,10,15,14,  7,0,1,5,11,16,18,17,13,  12,2,6];
+  }
+
+  fixRedNumbers(){
+    // Try to ensure 6 and 8 are not on adjacent hexes
+    for(let attempts=0;attempts<100;attempts++){
+      let bad=false;
+      for(let i=0;i<19;i++){
+        if(this.hexes[i].number!==6&&this.hexes[i].number!==8) continue;
+        for(let j of this.getAdjacentHexes(i)){
+          if(j>=0&&j<19&&(this.hexes[j].number===6||this.hexes[j].number===8)&&i!==j){
+            bad=true;
+            // Swap j's number with a random non-6/8 non-desert hex
+            let candidates=[];
+            for(let k=0;k<19;k++){
+              if(k===i||k===j||this.hexes[k].terrain===TERRAIN.DESERT) continue;
+              if(this.hexes[k].number!==6&&this.hexes[k].number!==8) candidates.push(k);
+            }
+            if(candidates.length>0){
+              let sw=candidates[Math.floor(Math.random()*candidates.length)];
+              let tmp=this.hexes[j].number;
+              this.hexes[j].number=this.hexes[sw].number;
+              this.hexes[sw].number=tmp;
+            }
+            break;
+          }
+        }
+        if(bad) break;
+      }
+      if(!bad) break;
+    }
+  }
+
+  getAdjacentHexes(idx){
+    let h=this.hexes[idx];
+    let dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]];
+    let result=[];
+    for(let [dq,dr] of dirs){
+      let nq=h.q+dq,nr=h.r+dr;
+      let fi=this.hexes.findIndex(hh=>hh.q===nq&&hh.r===nr);
+      if(fi>=0) result.push(fi);
+    }
+    return result;
+  }
+
+  computePositions(){
+    this.hexCenters=[];
+    for(let h of this.hexes){
+      let x=HEX_SIZE*1.5*h.q;
+      let y=HEX_SIZE*Math.sqrt(3)*(h.r+h.q/2);
+      this.hexCenters.push({x,y});
+    }
+  }
+
+  hexCorner(cx,cy,i){
+    let angle=Math.PI/180*(60*i-30);
+    return {x:cx+HEX_SIZE*Math.cos(angle),y:cy+HEX_SIZE*Math.sin(angle)};
+  }
+
+  buildGraph(){
+    // Collect all unique vertices and edges from hex corners
+    let vMap=new Map(); // "x,y" -> index
+    let eSet=new Set(); // "v1,v2" sorted
+
+    const addVertex=(x,y)=>{
+      let key=Math.round(x*10)+','+Math.round(y*10);
+      if(!vMap.has(key)){
+        let idx=this.vertices.length;
+        vMap.set(key,idx);
+        this.vertices.push({x,y,building:null,player:-1,harbor:-2,hexes:[],idx});
+      }
+      return vMap.get(key);
+    };
+
+    const addEdge=(v1,v2)=>{
+      let a=Math.min(v1,v2),b=Math.max(v1,v2);
+      let key=a+','+b;
+      if(!eSet.has(key)){
+        eSet.add(key);
+        this.edges.push({v1:a,v2:b,road:false,player:-1,idx:this.edges.length});
+      }
+    };
+
+    for(let hi=0;hi<this.hexes.length;hi++){
+      let c=this.hexCenters[hi];
+      let vIds=[];
+      for(let i=0;i<6;i++){
+        let corner=this.hexCorner(c.x,c.y,i);
+        let vi=addVertex(corner.x,corner.y);
+        vIds.push(vi);
+        if(!this.vertices[vi].hexes.includes(hi)) this.vertices[vi].hexes.push(hi);
+      }
+      for(let i=0;i<6;i++){
+        addEdge(vIds[i],vIds[(i+1)%6]);
+      }
+    }
+  }
+
+  assignHarbors(){
+    // Find coastal vertices (vertices touching fewer than 3 hexes)
+    // Standard Catan has 9 harbors at fixed coastal positions
+    // We'll identify coastal edges and assign harbors
+    let coastalEdgePairs=this.findCoastalEdgePairs();
+    let harborTypes=shuffle([-1,-1,-1,-1,RES.BRICK,RES.LUMBER,RES.WOOL,RES.GRAIN,RES.ORE]);
+
+    for(let i=0;i<Math.min(9,coastalEdgePairs.length);i++){
+      let [v1,v2]=coastalEdgePairs[i];
+      let ht=harborTypes[i];
+      this.vertices[v1].harbor=ht;
+      this.vertices[v2].harbor=ht;
+    }
+  }
+
+  findCoastalEdgePairs(){
+    // Find edges where both vertices are on the coast (touch <=2 hexes)
+    // and the edge itself is a boundary edge (shared by only 1 hex)
+    let pairs=[];
+    let used=new Set();
+    // Coastal vertices: touching 1 or 2 hexes
+    let coastal=new Set();
+    for(let v of this.vertices){
+      if(v.hexes.length<=2) coastal.add(v.idx);
+    }
+    // Find edges connecting two coastal vertices
+    for(let e of this.edges){
+      if(coastal.has(e.v1)&&coastal.has(e.v2)){
+        // Check this edge is on the border (not between two hexes)
+        let shared=this.vertices[e.v1].hexes.filter(h=>this.vertices[e.v2].hexes.includes(h));
+        if(shared.length<=1){
+          pairs.push([e.v1,e.v2]);
+        }
+      }
+    }
+    // Space them out - pick every other pair approximately
+    // Sort pairs by angle from center
+    let cx=0,cy=0;
+    for(let c of this.hexCenters){cx+=c.x;cy+=c.y;}
+    cx/=this.hexCenters.length;cy/=this.hexCenters.length;
+    pairs.sort((a,b)=>{
+      let ax=(this.vertices[a[0]].x+this.vertices[a[1]].x)/2;
+      let ay=(this.vertices[a[0]].y+this.vertices[a[1]].y)/2;
+      let bx=(this.vertices[b[0]].x+this.vertices[b[1]].x)/2;
+      let by=(this.vertices[b[0]].y+this.vertices[b[1]].y)/2;
+      return Math.atan2(ay-cy,ax-cx)-Math.atan2(by-cy,bx-cx);
+    });
+    // Pick 9 evenly spaced
+    let result=[];
+    let step=Math.max(1,Math.floor(pairs.length/9));
+    for(let i=0;i<pairs.length&&result.length<9;i+=step){
+      result.push(pairs[i]);
+    }
+    return result;
+  }
+
+  getVertexNeighborVertices(vi){
+    let neighbors=[];
+    for(let e of this.edges){
+      if(e.v1===vi) neighbors.push(e.v2);
+      if(e.v2===vi) neighbors.push(e.v1);
+    }
+    return neighbors;
+  }
+
+  getVertexEdges(vi){
+    return this.edges.filter(e=>e.v1===vi||e.v2===vi);
+  }
+
+  getEdgeBetween(v1,v2){
+    let a=Math.min(v1,v2),b=Math.max(v1,v2);
+    return this.edges.find(e=>e.v1===a&&e.v2===b)||null;
+  }
+
+  getHexVertices(hi){
+    return this.vertices.filter(v=>v.hexes.includes(hi)).map(v=>v.idx);
+  }
+}
+
+// === GAME STATE ===
+class CatanGame {
+  constructor(difficulty){
+    this.difficulty=difficulty;
+    this.grid=new HexGrid();
+    this.grid.generate();
+    this.players=[];
+    for(let i=0;i<4;i++){
+      this.players.push({
+        id:i,
+        name:PLAYER_NAMES[i],
+        color:PLAYER_COLORS[i],
+        resources:{brick:0,lumber:0,wool:0,grain:0,ore:0},
+        devCards:[],
+        devCardsPlayed:[],
+        knightsPlayed:0,
+        settlements:[],
+        cities:[],
+        roads:[],
+        vp:0,
+        hasLongestRoad:false,
+        hasLargestArmy:false,
+        longestRoadLength:0,
+        isHuman:i===0,
+        playedDevThisTurn:false,
+        tradeRates:{brick:4,lumber:4,wool:4,grain:4,ore:4}
+      });
+    }
+    this.devDeck=this.createDevDeck();
+    this.phase='setup'; // setup, main, gameover
+    this.setupRound=1; // 1 or 2
+    this.setupPlayerIdx=0;
+    this.setupStep='settlement'; // settlement or road
+    this.currentPlayer=0;
+    this.turnPhase='pre-roll'; // pre-roll, post-roll, robber-move, robber-steal, discard, build
+    this.diceRoll=[0,0];
+    this.diceTotal=0;
+    this.turnNumber=0;
+    this.winner=-1;
+    this.messages=[];
+    this.lastDiceRoll=0;
+    this.tradeOfferPending=false;
+    this.awaitingInput=false;
+  }
+
+  createDevDeck(){
+    let deck=[];
+    for(let i=0;i<14;i++) deck.push(DEV.KNIGHT);
+    for(let i=0;i<5;i++) deck.push(DEV.VP);
+    for(let i=0;i<2;i++) deck.push(DEV.ROAD_BUILD);
+    for(let i=0;i<2;i++) deck.push(DEV.YEAR_PLENTY);
+    for(let i=0;i<2;i++) deck.push(DEV.MONOPOLY);
+    return shuffle(deck);
+  }
+
+  log(msg){
+    this.messages.push(msg);
+    if(this.messages.length>50) this.messages.shift();
+  }
+
+  totalResources(p){
+    let r=this.players[p].resources;
+    return r.brick+r.lumber+r.wool+r.grain+r.ore;
+  }
+
+  canAfford(p,cost){
+    let r=this.players[p].resources;
+    for(let k of RES_KEYS){
+      if((cost[k]||0)>r[k]) return false;
+    }
+    return true;
+  }
+
+  payCost(p,cost){
+    let r=this.players[p].resources;
+    for(let k of RES_KEYS){
+      r[k]-=(cost[k]||0);
+    }
+  }
+
+  addResources(p,res){
+    let r=this.players[p].resources;
+    for(let k of RES_KEYS){
+      r[k]+=(res[k]||0);
+    }
+  }
+
+  rollDice(){
+    let d1=Math.floor(Math.random()*6)+1;
+    let d2=Math.floor(Math.random()*6)+1;
+    this.diceRoll=[d1,d2];
+    this.diceTotal=d1+d2;
+    this.lastDiceRoll=this.diceTotal;
+    return this.diceTotal;
+  }
+
+  distributeResources(num){
+    if(num===7) return;
+    for(let hi=0;hi<this.grid.hexes.length;hi++){
+      let hex=this.grid.hexes[hi];
+      if(hex.number!==num||hex.hasRobber) continue;
+      let resType=TERRAIN_RES[hex.terrain];
+      if(resType<0) continue;
+      let resKey=RES_KEYS[resType];
+      let verts=this.grid.getHexVertices(hi);
+      for(let vi of verts){
+        let v=this.grid.vertices[vi];
+        if(v.player>=0){
+          let amount=v.building==='city'?2:1;
+          this.players[v.player].resources[resKey]+=amount;
+        }
+      }
+    }
+  }
+
+  // Check valid placement positions
+  getValidSettlementVertices(p,isSetup=false){
+    let valid=[];
+    for(let vi=0;vi<this.grid.vertices.length;vi++){
+      if(this.canPlaceSettlement(p,vi,isSetup)) valid.push(vi);
+    }
+    return valid;
+  }
+
+  canPlaceSettlement(p,vi,isSetup=false){
+    let v=this.grid.vertices[vi];
+    if(v.building) return false; // occupied
+    if(v.hexes.length===0) return false; // not on board
+
+    // Distance rule: no adjacent buildings
+    let neighbors=this.grid.getVertexNeighborVertices(vi);
+    for(let ni of neighbors){
+      if(this.grid.vertices[ni].building) return false;
+    }
+
+    // Must be connected by road (unless setup phase)
+    if(!isSetup){
+      let connected=false;
+      for(let e of this.grid.getVertexEdges(vi)){
+        if(e.player===p) {connected=true;break;}
+      }
+      if(!connected) return false;
+    }
+
+    return true;
+  }
+
+  placeSettlement(p,vi,isSetup=false){
+    let v=this.grid.vertices[vi];
+    v.building='settlement';
+    v.player=p;
+    this.players[p].settlements.push(vi);
+    this.updateTradeRates(p);
+    this.updateVP(p);
+    if(isSetup&&this.setupRound===2){
+      // Give resources for adjacent hexes
+      for(let hi of v.hexes){
+        let hex=this.grid.hexes[hi];
+        let rt=TERRAIN_RES[hex.terrain];
+        if(rt>=0) this.players[p].resources[RES_KEYS[rt]]++;
+      }
+    }
+    this.log(`${this.players[p].name}が開拓地を建設`);
+  }
+
+  getValidCityVertices(p){
+    return this.players[p].settlements.filter(vi=>this.grid.vertices[vi].building==='settlement');
+  }
+
+  placeCity(p,vi){
+    this.grid.vertices[vi].building='city';
+    this.players[p].settlements=this.players[p].settlements.filter(v=>v!==vi);
+    this.players[p].cities.push(vi);
+    this.updateVP(p);
+    this.log(`${this.players[p].name}が都市に発展`);
+  }
+
+  getValidRoadEdges(p,fromVertex=-1){
+    let valid=[];
+    for(let ei=0;ei<this.grid.edges.length;ei++){
+      if(this.canPlaceRoad(p,ei,fromVertex)) valid.push(ei);
+    }
+    return valid;
+  }
+
+  canPlaceRoad(p,ei,fromVertex=-1){
+    let e=this.grid.edges[ei];
+    if(e.road) return false;
+
+    // Check edge is on the board (both vertices have hexes)
+    if(this.grid.vertices[e.v1].hexes.length===0||this.grid.vertices[e.v2].hexes.length===0) return false;
+
+    if(fromVertex>=0){
+      return e.v1===fromVertex||e.v2===fromVertex;
+    }
+
+    // Must connect to player's existing road or building
+    let connected=false;
+    for(let vi of [e.v1,e.v2]){
+      let v=this.grid.vertices[vi];
+      if(v.player===p){connected=true;break;}
+      // Check roads at this vertex
+      for(let oe of this.grid.getVertexEdges(vi)){
+        if(oe.idx!==ei&&oe.player===p){
+          // Check no opponent building blocking
+          if(v.player<0||v.player===p){
+            connected=true;break;
+          }
+        }
+      }
+      if(connected) break;
+    }
+    return connected;
+  }
+
+  placeRoad(p,ei){
+    let e=this.grid.edges[ei];
+    e.road=true;
+    e.player=p;
+    this.players[p].roads.push(ei);
+    this.updateLongestRoad();
+    this.updateVP(p);
+    this.log(`${this.players[p].name}が街道を建設`);
+  }
+
+  updateTradeRates(p){
+    let rates={brick:4,lumber:4,wool:4,grain:4,ore:4};
+    let allSettled=[...this.players[p].settlements,...this.players[p].cities];
+    for(let vi of allSettled){
+      let h=this.grid.vertices[vi].harbor;
+      if(h===-1){ // 3:1
+        for(let k of RES_KEYS) rates[k]=Math.min(rates[k],3);
+      } else if(h>=0){
+        rates[RES_KEYS[h]]=Math.min(rates[RES_KEYS[h]],2);
+      }
+    }
+    this.players[p].tradeRates=rates;
+  }
+
+  buyDevCard(p){
+    if(this.devDeck.length===0) return false;
+    let card=this.devDeck.pop();
+    this.players[p].devCards.push({type:card,turnBought:this.turnNumber});
+    this.log(`${this.players[p].name}が発展カードを購入`);
+    if(card===DEV.VP){
+      this.updateVP(p);
+    }
+    return true;
+  }
+
+  canPlayDev(p,cardIdx){
+    let pl=this.players[p];
+    if(pl.playedDevThisTurn) return false;
+    let card=pl.devCards[cardIdx];
+    if(!card) return false;
+    if(card.type===DEV.VP) return false; // VP cards auto-count
+    if(card.turnBought===this.turnNumber) return false; // Can't play card bought this turn
+    return true;
+  }
+
+  playKnight(p){
+    let pl=this.players[p];
+    pl.knightsPlayed++;
+    pl.playedDevThisTurn=true;
+    this.log(`${pl.name}が騎士カードを使用`);
+    this.updateLargestArmy();
+  }
+
+  updateLargestArmy(){
+    let maxKnights=2; // Need at least 3
+    let holder=-1;
+    for(let i=0;i<4;i++){
+      if(this.players[i].hasLargestArmy) holder=i;
+    }
+    for(let i=0;i<4;i++){
+      if(this.players[i].knightsPlayed>maxKnights){
+        maxKnights=this.players[i].knightsPlayed;
+      }
+    }
+    if(maxKnights<3) return;
+    let newHolder=-1;
+    for(let i=0;i<4;i++){
+      if(this.players[i].knightsPlayed===maxKnights){
+        if(newHolder===-1) newHolder=i;
+        else return; // tie - no change
+      }
+    }
+    if(newHolder>=0&&newHolder!==holder){
+      for(let i=0;i<4;i++) this.players[i].hasLargestArmy=false;
+      this.players[newHolder].hasLargestArmy=true;
+      this.log(`${this.players[newHolder].name}が最大騎士力を獲得！`);
+      for(let i=0;i<4;i++) this.updateVP(i);
+    }
+  }
+
+  updateLongestRoad(){
+    for(let p=0;p<4;p++){
+      this.players[p].longestRoadLength=this.calcLongestRoad(p);
+    }
+    let maxLen=4; // Need at least 5
+    let holder=-1;
+    for(let i=0;i<4;i++){
+      if(this.players[i].hasLongestRoad) holder=i;
+    }
+    for(let i=0;i<4;i++){
+      if(this.players[i].longestRoadLength>maxLen){
+        maxLen=this.players[i].longestRoadLength;
+      }
+    }
+    if(maxLen<5) return;
+    let candidates=[];
+    for(let i=0;i<4;i++){
+      if(this.players[i].longestRoadLength===maxLen) candidates.push(i);
+    }
+    if(candidates.length===1&&candidates[0]!==holder){
+      for(let i=0;i<4;i++) this.players[i].hasLongestRoad=false;
+      this.players[candidates[0]].hasLongestRoad=true;
+      this.log(`${this.players[candidates[0]].name}が最長交易路を獲得！`);
+      for(let i=0;i<4;i++) this.updateVP(i);
+    } else if(holder>=0&&!candidates.includes(holder)){
+      // Current holder lost it
+      for(let i=0;i<4;i++) this.players[i].hasLongestRoad=false;
+      if(candidates.length===1){
+        this.players[candidates[0]].hasLongestRoad=true;
+        this.log(`${this.players[candidates[0]].name}が最長交易路を獲得！`);
+      }
+      for(let i=0;i<4;i++) this.updateVP(i);
+    }
+  }
+
+  calcLongestRoad(p){
+    let roads=this.players[p].roads;
+    if(roads.length===0) return 0;
+
+    // Build adjacency from player's roads
+    let adj=new Map();
+    for(let ei of roads){
+      let e=this.grid.edges[ei];
+      if(!adj.has(e.v1)) adj.set(e.v1,[]);
+      if(!adj.has(e.v2)) adj.set(e.v2,[]);
+      adj.get(e.v1).push({to:e.v2,edge:ei});
+      adj.get(e.v2).push({to:e.v1,edge:ei});
+    }
+
+    let maxLen=0;
+    let visited=new Set();
+
+    const dfs=(node,len)=>{
+      maxLen=Math.max(maxLen,len);
+      let neighbors=adj.get(node)||[];
+      for(let {to,edge} of neighbors){
+        if(visited.has(edge)) continue;
+        // Check for opponent building blocking
+        let v=this.grid.vertices[to];
+        if(v.player>=0&&v.player!==p) continue;
+        visited.add(edge);
+        dfs(to,len+1);
+        visited.delete(edge);
+      }
+    };
+
+    for(let [startNode] of adj){
+      visited.clear();
+      dfs(startNode,0);
+    }
+    return maxLen;
+  }
+
+  updateVP(p){
+    let pl=this.players[p];
+    let vp=pl.settlements.length+pl.cities.length*2;
+    if(pl.hasLongestRoad) vp+=2;
+    if(pl.hasLargestArmy) vp+=2;
+    // VP dev cards
+    for(let c of pl.devCards){
+      if(c.type===DEV.VP) vp++;
+    }
+    pl.vp=vp;
+    if(vp>=10&&this.phase==='main'){
+      this.phase='gameover';
+      this.winner=p;
+      this.log(`🎉 ${pl.name}が${vp}点で勝利！`);
+    }
+  }
+
+  moveRobber(hexIdx){
+    for(let h of this.grid.hexes) h.hasRobber=false;
+    this.grid.hexes[hexIdx].hasRobber=true;
+    this.grid.robberHex=hexIdx;
+    this.log(`盗賊が${TERRAIN_NAMES[this.grid.hexes[hexIdx].terrain]}に移動`);
+  }
+
+  getStealTargets(hexIdx,thief){
+    let targets=new Set();
+    let verts=this.grid.getHexVertices(hexIdx);
+    for(let vi of verts){
+      let v=this.grid.vertices[vi];
+      if(v.player>=0&&v.player!==thief&&this.totalResources(v.player)>0){
+        targets.add(v.player);
+      }
+    }
+    return [...targets];
+  }
+
+  stealFrom(thief,victim){
+    let r=this.players[victim].resources;
+    let available=[];
+    for(let k of RES_KEYS){
+      for(let i=0;i<r[k];i++) available.push(k);
+    }
+    if(available.length===0) return;
+    let stolen=available[Math.floor(Math.random()*available.length)];
+    r[stolen]--;
+    this.players[thief].resources[stolen]++;
+    if(thief===0||victim===0){
+      this.log(`${this.players[thief].name}が${this.players[victim].name}から${RES_NAMES[RES_KEYS.indexOf(stolen)]}を奪った`);
+    } else {
+      this.log(`${this.players[thief].name}が${this.players[victim].name}から資源を奪った`);
+    }
+  }
+
+  getPlayersToDiscard(){
+    let result=[];
+    for(let i=0;i<4;i++){
+      if(this.totalResources(i)>7) result.push(i);
+    }
+    return result;
+  }
+}
+
+// === AI ===
+class CatanAI {
+  constructor(game,playerIdx){
+    this.game=game;
+    this.p=playerIdx;
+    this.diff=game.difficulty;
+  }
+
+  get pl(){ return this.game.players[this.p]; }
+  get grid(){ return this.game.grid; }
+
+  // Rate a vertex for settlement placement
+  rateVertex(vi){
+    let v=this.grid.vertices[vi];
+    let score=0;
+    let resCounts=[0,0,0,0,0];
+    let dotCounts=[0,0,0,0,0]; // pip values
+
+    for(let hi of v.hexes){
+      let hex=this.grid.hexes[hi];
+      if(hex.terrain===TERRAIN.DESERT) continue;
+      let rt=TERRAIN_RES[hex.terrain];
+      let pips=this.numberPips(hex.number);
+      resCounts[rt]++;
+      dotCounts[rt]+=pips;
+      score+=pips;
+    }
+
+    // Diversity bonus
+    let types=resCounts.filter(c=>c>0).length;
+    score+=types*(this.diff>=3?3:1);
+
+    // Resource balance (prefer having brick+lumber for roads, grain+ore for cities)
+    if(this.diff>=4){
+      let hasSettlementRes=(dotCounts[RES.BRICK]>0&&dotCounts[RES.LUMBER]>0);
+      let hasCityRes=(dotCounts[RES.GRAIN]>0&&dotCounts[RES.ORE]>0);
+      if(hasSettlementRes) score+=2;
+      if(hasCityRes) score+=3;
+    }
+
+    // Harbor bonus
+    if(v.harbor>=0) score+=2;
+    if(v.harbor===-1) score+=1;
+
+    // Add some randomness for lower difficulty
+    if(this.diff<=2) score+=Math.random()*6;
+    else if(this.diff<=3) score+=Math.random()*3;
+    else score+=Math.random()*1;
+
+    return score;
+  }
+
+  numberPips(n){
+    return n===0?0:6-Math.abs(7-n);
+  }
+
+  chooseSetupSettlement(){
+    let valid=this.game.getValidSettlementVertices(this.p,true);
+    if(valid.length===0) return -1;
+    let scored=valid.map(vi=>({vi,score:this.rateVertex(vi)}));
+    scored.sort((a,b)=>b.score-a.score);
+    return scored[0].vi;
+  }
+
+  chooseSetupRoad(settlementVi){
+    let valid=this.game.getValidRoadEdges(this.p,settlementVi);
+    if(valid.length===0) return -1;
+
+    if(this.diff<=2){
+      return valid[Math.floor(Math.random()*valid.length)];
+    }
+
+    // Point road toward best expansion
+    let scored=valid.map(ei=>{
+      let e=this.grid.edges[ei];
+      let other=e.v1===settlementVi?e.v2:e.v1;
+      // Rate the direction based on what vertices it leads toward
+      let expandScore=0;
+      let neighbors=this.grid.getVertexNeighborVertices(other);
+      for(let ni of neighbors){
+        if(this.game.canPlaceSettlement(this.p,ni,true)){
+          expandScore+=this.rateVertex(ni)*0.5;
+        }
+      }
+      return {ei,score:expandScore+Math.random()};
+    });
+    scored.sort((a,b)=>b.score-a.score);
+    return scored[0].ei;
+  }
+
+  // Main turn AI
+  async takeTurn(){
+    let g=this.game;
+
+    // Pre-roll: maybe play knight
+    if(this.diff>=3&&!this.pl.playedDevThisTurn){
+      let knightIdx=this.pl.devCards.findIndex((c,i)=>c.type===DEV.KNIGHT&&g.canPlayDev(this.p,i));
+      if(knightIdx>=0&&this.shouldPlayKnight()){
+        this.playDevCard(knightIdx);
+        await this.handleRobber();
+      }
+    }
+
+    // Roll dice
+    let total=g.rollDice();
+    updateDiceDisplay();
+    g.log(`${this.pl.name}がサイコロを振った: ${g.diceRoll[0]}+${g.diceRoll[1]}=${total}`);
+    await sleep(500);
+
+    if(total===7){
+      // Discard phase for all players with >7 cards
+      await this.handleSevenRoll();
+      // Move robber
+      await this.handleRobber();
+    } else {
+      g.distributeResources(total);
+    }
+
+    // Build phase
+    await this.buildPhase();
+
+    // Maybe play a dev card
+    if(!this.pl.playedDevThisTurn){
+      await this.maybePlayDevCard();
+    }
+  }
+
+  shouldPlayKnight(){
+    // Play knight if robber is on our hex, or we're close to largest army
+    let onOurHex=false;
+    let robHex=this.grid.robberHex;
+    let verts=this.grid.getHexVertices(robHex);
+    for(let vi of verts){
+      if(this.grid.vertices[vi].player===this.p) {onOurHex=true;break;}
+    }
+    if(onOurHex) return true;
+    if(this.pl.knightsPlayed>=2) return true;
+    return Math.random()<0.3;
+  }
+
+  async handleSevenRoll(){
+    // CPU discards
+    for(let i=0;i<4;i++){
+      if(i===0) continue; // Human handled separately
+      let total=this.game.totalResources(i);
+      if(total>7){
+        let discard=Math.floor(total/2);
+        this.cpuDiscard(i,discard);
+      }
+    }
+    // Check if human needs to discard
+    if(this.game.totalResources(0)>7){
+      await waitForHumanDiscard(0);
+    }
+  }
+
+  cpuDiscard(p,count){
+    let r=this.game.players[p].resources;
+    for(let i=0;i<count;i++){
+      // Discard least useful resource
+      let available=RES_KEYS.filter(k=>r[k]>0);
+      if(available.length===0) break;
+      if(this.diff<=2){
+        let k=available[Math.floor(Math.random()*available.length)];
+        r[k]--;
+      } else {
+        // Keep ore and grain, discard others first
+        let priorities=['brick','lumber','wool','grain','ore'];
+        if(this.diff>=4) priorities=['wool','brick','lumber','grain','ore'];
+        for(let k of priorities){
+          if(r[k]>0){r[k]--;break;}
+        }
+      }
+    }
+    this.game.log(`${this.game.players[p].name}が${count}枚の資源を捨てた`);
+  }
+
+  async handleRobber(){
+    // Choose hex to place robber
+    let bestHex=-1;
+    let bestScore=-999;
+
+    for(let hi=0;hi<this.grid.hexes.length;hi++){
+      if(this.grid.hexes[hi].hasRobber) continue;
+      let hex=this.grid.hexes[hi];
+      if(hex.terrain===TERRAIN.DESERT) continue;
+
+      let score=0;
+      let verts=this.grid.getHexVertices(hi);
+      let affectsOpponent=false;
+      let affectsSelf=false;
+
+      for(let vi of verts){
+        let v=this.grid.vertices[vi];
+        if(v.player>=0&&v.player!==this.p){
+          score+=this.numberPips(hex.number)*(v.building==='city'?2:1);
+          affectsOpponent=true;
+          // Target leading player
+          if(this.diff>=3) score+=this.game.players[v.player].vp;
+        }
+        if(v.player===this.p) affectsSelf=true;
+      }
+      if(!affectsOpponent) score-=5;
+      if(affectsSelf) score-=8;
+      score+=Math.random()*(6-this.diff);
+
+      if(score>bestScore){bestScore=score;bestHex=hi;}
+    }
+
+    if(bestHex>=0){
+      this.game.moveRobber(bestHex);
+      // Steal
+      let targets=this.game.getStealTargets(bestHex,this.p);
+      if(targets.length>0){
+        // Steal from player with most VP (or random for low diff)
+        let victim=targets[0];
+        if(this.diff>=3){
+          victim=targets.reduce((a,b)=>this.game.players[a].vp>=this.game.players[b].vp?a:b);
+        } else {
+          victim=targets[Math.floor(Math.random()*targets.length)];
+        }
+        this.game.stealFrom(this.p,victim);
+      }
+    }
+    await sleep(300);
+  }
+
+  async buildPhase(){
+    let g=this.game;
+    let iterations=0;
+    let maxIterations=20;
+
+    while(iterations++<maxIterations){
+      let built=false;
+
+      // Try to build city first (most VP efficient)
+      if(this.game.canAfford(this.p,COST.CITY)){
+        let cityVerts=g.getValidCityVertices(this.p);
+        if(cityVerts.length>0){
+          let vi=this.chooseBestCity(cityVerts);
+          g.payCost(this.p,COST.CITY);
+          g.placeCity(this.p,vi);
+          built=true;
+          await sleep(200);
+          if(g.phase==='gameover') return;
+          continue;
+        }
+      }
+
+      // Try to build settlement
+      if(this.game.canAfford(this.p,COST.SETTLEMENT)&&this.pl.settlements.length+this.pl.cities.length<5){
+        let settVerts=g.getValidSettlementVertices(this.p);
+        if(settVerts.length>0){
+          let vi=this.chooseBestSettlement(settVerts);
+          g.payCost(this.p,COST.SETTLEMENT);
+          g.placeSettlement(this.p,vi);
+          built=true;
+          await sleep(200);
+          if(g.phase==='gameover') return;
+          continue;
+        }
+      }
+
+      // Buy dev card
+      if(this.shouldBuyDevCard()&&g.canAfford(this.p,COST.DEV_CARD)&&g.devDeck.length>0){
+        g.payCost(this.p,COST.DEV_CARD);
+        g.buyDevCard(this.p);
+        built=true;
+        await sleep(200);
+        if(g.phase==='gameover') return;
+        continue;
+      }
+
+      // Build road toward expansion
+      if(this.game.canAfford(this.p,COST.ROAD)&&this.pl.roads.length<15){
+        if(this.shouldBuildRoad()){
+          let roadEdges=g.getValidRoadEdges(this.p);
+          if(roadEdges.length>0){
+            let ei=this.chooseBestRoad(roadEdges);
+            g.payCost(this.p,COST.ROAD);
+            g.placeRoad(this.p,ei);
+            built=true;
+            await sleep(200);
+            continue;
+          }
+        }
+      }
+
+      // Try bank trading if useful
+      if(this.diff>=2&&!built){
+        if(this.tryBankTrade()) {
+          built=true;
+          continue;
+        }
+      }
+
+      if(!built) break;
+    }
+  }
+
+  chooseBestCity(cityVerts){
+    if(this.diff<=2) return cityVerts[Math.floor(Math.random()*cityVerts.length)];
+    // Upgrade settlement on best hex
+    let best=cityVerts[0];
+    let bestScore=-1;
+    for(let vi of cityVerts){
+      let score=this.rateVertex(vi);
+      if(score>bestScore){bestScore=score;best=vi;}
+    }
+    return best;
+  }
+
+  chooseBestSettlement(verts){
+    let scored=verts.map(vi=>({vi,score:this.rateVertex(vi)}));
+    scored.sort((a,b)=>b.score-a.score);
+    return scored[0].vi;
+  }
+
+  shouldBuyDevCard(){
+    if(this.diff<=1) return Math.random()<0.2;
+    if(this.diff<=2) return Math.random()<0.3;
+    // Buy if close to largest army or if can't build anything useful
+    let validSett=this.game.getValidSettlementVertices(this.p);
+    let needRoadsForSett=validSett.length===0;
+    if(this.pl.knightsPlayed>=2&&this.pl.knightsPlayed<4) return true;
+    if(needRoadsForSett&&this.pl.devCards.length<3) return Math.random()<0.5;
+    return Math.random()<0.2;
+  }
+
+  shouldBuildRoad(){
+    // Build road if it opens up new settlement spots
+    let validSett=this.game.getValidSettlementVertices(this.p);
+    if(validSett.length===0) return true; // Need to expand
+    if(this.diff>=4&&this.pl.longestRoadLength>=4) return true; // Go for longest road
+    return this.pl.roads.length<6; // Build some roads early
+  }
+
+  chooseBestRoad(edges){
+    if(this.diff<=2) return edges[Math.floor(Math.random()*edges.length)];
+
+    let scored=edges.map(ei=>{
+      let e=this.grid.edges[ei];
+      let score=0;
+      // Prefer roads leading to good settlement spots
+      for(let vi of [e.v1,e.v2]){
+        let neighbors=this.grid.getVertexNeighborVertices(vi);
+        for(let ni of neighbors){
+          if(this.game.canPlaceSettlement(this.p,ni)){
+            score+=this.rateVertex(ni)*0.3;
+          }
+        }
+      }
+      score+=Math.random()*2;
+      return {ei,score};
+    });
+    scored.sort((a,b)=>b.score-a.score);
+    return scored[0].ei;
+  }
+
+  tryBankTrade(){
+    let r=this.pl.resources;
+    let rates=this.pl.tradeRates;
+
+    // Find what we need most
+    let needs=this.getNeededResources();
+    // Find what we have excess of
+    for(let give of RES_KEYS){
+      if(r[give]>=rates[give]){
+        for(let want of needs){
+          if(want!==give){
+            r[give]-=rates[give];
+            r[want]++;
+            this.game.log(`${this.pl.name}が銀行と交易: ${RES_NAMES[RES_KEYS.indexOf(give)]}${rates[give]}→${RES_NAMES[RES_KEYS.indexOf(want)]}1`);
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  getNeededResources(){
+    // Determine what resources are needed for next build
+    let needs=[];
+    let r=this.pl.resources;
+    // Check for city
+    if(this.game.getValidCityVertices(this.p).length>0){
+      if(r.grain<2) needs.push('grain');
+      if(r.ore<3) needs.push('ore');
+    }
+    // Check for settlement
+    if(r.brick<1) needs.push('brick');
+    if(r.lumber<1) needs.push('lumber');
+    if(r.wool<1) needs.push('wool');
+    if(r.grain<1) needs.push('grain');
+    // Dev card
+    if(r.ore<1) needs.push('ore');
+    return [...new Set(needs)];
+  }
+
+  async maybePlayDevCard(){
+    if(this.pl.playedDevThisTurn) return;
+
+    for(let i=0;i<this.pl.devCards.length;i++){
+      if(!this.game.canPlayDev(this.p,i)) continue;
+      let card=this.pl.devCards[i];
+
+      if(card.type===DEV.ROAD_BUILD&&this.pl.roads.length<13){
+        this.playDevCard(i);
+        // Build 2 free roads
+        for(let r=0;r<2;r++){
+          let edges=this.game.getValidRoadEdges(this.p);
+          if(edges.length>0){
+            let ei=this.chooseBestRoad(edges);
+            this.game.placeRoad(this.p,ei);
+          }
+        }
+        this.game.log(`${this.pl.name}が街道建設を使用`);
+        return;
+      }
+
+      if(card.type===DEV.YEAR_PLENTY){
+        this.playDevCard(i);
+        let needs=this.getNeededResources();
+        let r1=needs[0]||'ore';
+        let r2=needs[1]||needs[0]||'grain';
+        this.pl.resources[r1]++;
+        this.pl.resources[r2]++;
+        this.game.log(`${this.pl.name}が収穫を使用: ${RES_NAMES[RES_KEYS.indexOf(r1)]},${RES_NAMES[RES_KEYS.indexOf(r2)]}`);
+        return;
+      }
+
+      if(card.type===DEV.MONOPOLY&&this.diff>=3){
+        // Monopoly on resource with most cards out there
+        let bestRes='wool';
+        let maxCards=0;
+        for(let k of RES_KEYS){
+          let total=0;
+          for(let j=0;j<4;j++){
+            if(j!==this.p) total+=this.game.players[j].resources[k];
+          }
+          if(total>maxCards){maxCards=total;bestRes=k;}
+        }
+        if(maxCards>=3||(this.diff>=4&&maxCards>=2)){
+          this.playDevCard(i);
+          let stolen=0;
+          for(let j=0;j<4;j++){
+            if(j===this.p) continue;
+            stolen+=this.game.players[j].resources[bestRes];
+            this.game.players[j].resources[bestRes]=0;
+          }
+          this.pl.resources[bestRes]+=stolen;
+          this.game.log(`${this.pl.name}が独占を使用: ${RES_NAMES[RES_KEYS.indexOf(bestRes)]}を${stolen}枚獲得`);
+          return;
+        }
+      }
+    }
+  }
+
+  playDevCard(cardIdx){
+    let card=this.pl.devCards.splice(cardIdx,1)[0];
+    this.pl.devCardsPlayed.push(card);
+    this.pl.playedDevThisTurn=true;
+  }
+}
+
+// === UI & RENDERING ===
+let offsetX=0,offsetY=0;
+let isDragging=false,dragStartX=0,dragStartY=0;
+
+function initCanvas(){
+  canvas=document.getElementById('gameCanvas');
+  ctx=canvas.getContext('2d');
+  resize();
+  window.addEventListener('resize',resize);
+  tooltipEl=document.getElementById('tooltip');
+  messageLogEl=document.getElementById('message-log');
+}
+
+function resize(){
+  W=window.innerWidth;
+  H=window.innerHeight;
+  canvas.width=W;
+  canvas.height=H;
+  // Center the board
+  if(game){
+    let cx=0,cy=0;
+    for(let c of game.grid.hexCenters){cx+=c.x;cy+=c.y;}
+    cx/=game.grid.hexCenters.length;
+    cy/=game.grid.hexCenters.length;
+    offsetX=W/2-cx-80;
+    offsetY=H/2-cy;
+  }
+  render();
+}
+
+function render(){
+  if(!game) return;
+  ctx.clearRect(0,0,W,H);
+
+  ctx.save();
+  ctx.translate(offsetX,offsetY);
+
+  drawOcean();
+  drawHexes();
+  drawHarbors();
+  drawEdges();
+  drawVertices();
+  drawRobber();
+
+  // Highlights for build mode
+  if(buildMode&&game.phase!=='gameover'){
+    drawBuildHighlights();
+  }
+
+  ctx.restore();
+
+  updateUI();
+}
+
+function drawOcean(){
+  // Draw ocean background around the board
+  ctx.fillStyle='#1a4a7a';
+  let cx=0,cy=0;
+  for(let c of game.grid.hexCenters){cx+=c.x;cy+=c.y;}
+  cx/=game.grid.hexCenters.length;
+  cy/=game.grid.hexCenters.length;
+  ctx.beginPath();
+  ctx.arc(cx,cy,HEX_SIZE*5.5,0,Math.PI*2);
+  ctx.fill();
+}
+
+function drawHexes(){
+  for(let hi=0;hi<game.grid.hexes.length;hi++){
+    let hex=game.grid.hexes[hi];
+    let c=game.grid.hexCenters[hi];
+
+    // Draw hex
+    ctx.beginPath();
+    for(let i=0;i<6;i++){
+      let corner=game.grid.hexCorner(c.x,c.y,i);
+      if(i===0) ctx.moveTo(corner.x,corner.y);
+      else ctx.lineTo(corner.x,corner.y);
+    }
+    ctx.closePath();
+    ctx.fillStyle=TERRAIN_COLORS[hex.terrain];
+    ctx.fill();
+    ctx.strokeStyle='#333';
+    ctx.lineWidth=1.5;
+    ctx.stroke();
+
+    // Highlight on hover
+    if(hoverHex===hi&&buildMode==='robber'){
+      ctx.fillStyle='rgba(255,0,0,0.3)';
+      ctx.fill();
+    }
+
+    // Draw number token
+    if(hex.number>0){
+      ctx.beginPath();
+      ctx.arc(c.x,c.y,15,0,Math.PI*2);
+      ctx.fillStyle='#f5e6c8';
+      ctx.fill();
+      ctx.strokeStyle='#333';
+      ctx.lineWidth=1;
+      ctx.stroke();
+
+      ctx.fillStyle=(hex.number===6||hex.number===8)?'#c00':'#333';
+      ctx.font=(hex.number===6||hex.number===8)?'bold 14px sans-serif':'13px sans-serif';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText(hex.number,c.x,c.y-1);
+
+      // Dots (pips)
+      let pips=6-Math.abs(7-hex.number);
+      ctx.fillStyle=(hex.number===6||hex.number===8)?'#c00':'#666';
+      let dotY=c.y+10;
+      let dotStartX=c.x-(pips-1)*3;
+      for(let d=0;d<pips;d++){
+        ctx.beginPath();
+        ctx.arc(dotStartX+d*6,dotY,1.5,0,Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // Terrain icon/label
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.font='9px sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText(TERRAIN_NAMES[hex.terrain],c.x,c.y+25);
+  }
+}
+
+function drawHarbors(){
+  // Draw harbor indicators on vertices
+  for(let v of game.grid.vertices){
+    if(v.harbor<-1) continue;
+    let cx=v.x,cy=v.y;
+
+    // Draw toward outside of board
+    let boardCX=0,boardCY=0;
+    for(let c of game.grid.hexCenters){boardCX+=c.x;boardCY+=c.y;}
+    boardCX/=game.grid.hexCenters.length;boardCY/=game.grid.hexCenters.length;
+
+    let dx=cx-boardCX,dy=cy-boardCY;
+    let len=Math.sqrt(dx*dx+dy*dy);
+    let ox=cx+dx/len*16,oy=cy+dy/len*16;
+
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.lineTo(ox,oy);
+    ctx.strokeStyle='#dda';
+    ctx.lineWidth=2;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(ox,oy,8,0,Math.PI*2);
+    if(v.harbor===-1){
+      ctx.fillStyle='#888';
+    } else {
+      ctx.fillStyle=RES_COLORS[v.harbor];
+    }
+    ctx.fill();
+    ctx.strokeStyle='#dda';
+    ctx.lineWidth=1;
+    ctx.stroke();
+
+    ctx.fillStyle='#fff';
+    ctx.font='bold 8px sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(v.harbor===-1?'3:1':'2:1',ox,oy);
+  }
+}
+
+function drawEdges(){
+  for(let e of game.grid.edges){
+    if(!e.road) continue;
+    let v1=game.grid.vertices[e.v1];
+    let v2=game.grid.vertices[e.v2];
+    ctx.beginPath();
+    ctx.moveTo(v1.x,v1.y);
+    ctx.lineTo(v2.x,v2.y);
+    ctx.strokeStyle=PLAYER_COLORS[e.player];
+    ctx.lineWidth=6;
+    ctx.lineCap='round';
+    ctx.stroke();
+    ctx.strokeStyle='rgba(0,0,0,0.3)';
+    ctx.lineWidth=7;
+    ctx.stroke();
+    // Redraw colored on top
+    ctx.strokeStyle=PLAYER_COLORS[e.player];
+    ctx.lineWidth=5;
+    ctx.stroke();
+  }
+}
+
+function drawVertices(){
+  for(let v of game.grid.vertices){
+    if(!v.building) continue;
+    let x=v.x,y=v.y;
+    ctx.fillStyle=PLAYER_COLORS[v.player];
+
+    if(v.building==='settlement'){
+      // Draw house shape
+      ctx.beginPath();
+      ctx.moveTo(x,y-10);
+      ctx.lineTo(x+8,y-2);
+      ctx.lineTo(x+8,y+7);
+      ctx.lineTo(x-8,y+7);
+      ctx.lineTo(x-8,y-2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle='#222';
+      ctx.lineWidth=1.5;
+      ctx.stroke();
+    } else if(v.building==='city'){
+      // Draw larger structure
+      ctx.beginPath();
+      ctx.moveTo(x-4,y-13);
+      ctx.lineTo(x+4,y-13);
+      ctx.lineTo(x+10,y-5);
+      ctx.lineTo(x+10,y+8);
+      ctx.lineTo(x-10,y+8);
+      ctx.lineTo(x-10,y-5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle='#222';
+      ctx.lineWidth=1.5;
+      ctx.stroke();
+      // Tower
+      ctx.fillRect(x-3,y-16,6,6);
+      ctx.strokeRect(x-3,y-16,6,6);
+    }
+  }
+}
+
+function drawRobber(){
+  let hi=game.grid.robberHex;
+  if(hi<0) return;
+  let c=game.grid.hexCenters[hi];
+  ctx.fillStyle='#222';
+  ctx.beginPath();
+  ctx.arc(c.x+15,c.y-10,7,0,Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(c.x+15,c.y-3);
+  ctx.lineTo(c.x+10,c.y+8);
+  ctx.lineTo(c.x+20,c.y+8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.font='8px sans-serif';
+  ctx.textAlign='center';
+  ctx.fillText('盗賊',c.x+15,c.y+16);
+}
+
+function drawBuildHighlights(){
+  if(buildMode==='settlement'||buildMode==='setup-settlement'){
+    let valid=game.getValidSettlementVertices(game.currentPlayer,game.phase==='setup');
+    for(let vi of valid){
+      let v=game.grid.vertices[vi];
+      ctx.beginPath();
+      ctx.arc(v.x,v.y,10,0,Math.PI*2);
+      ctx.fillStyle=vi===hoverVertex?'rgba(255,255,0,0.7)':'rgba(255,255,0,0.3)';
+      ctx.fill();
+      ctx.strokeStyle='#ff0';
+      ctx.lineWidth=1;
+      ctx.stroke();
+    }
+  }
+  if(buildMode==='road'||buildMode==='setup-road'){
+    let fromV=buildMode==='setup-road'?pendingAction?.fromVertex:-1;
+    let valid=game.getValidRoadEdges(game.currentPlayer,fromV);
+    for(let ei of valid){
+      let e=game.grid.edges[ei];
+      let v1=game.grid.vertices[e.v1];
+      let v2=game.grid.vertices[e.v2];
+      ctx.beginPath();
+      ctx.moveTo(v1.x,v1.y);
+      ctx.lineTo(v2.x,v2.y);
+      ctx.strokeStyle=ei===hoverEdge?'rgba(255,255,0,0.8)':'rgba(255,255,0,0.3)';
+      ctx.lineWidth=ei===hoverEdge?8:5;
+      ctx.lineCap='round';
+      ctx.stroke();
+    }
+  }
+  if(buildMode==='city'){
+    let valid=game.getValidCityVertices(game.currentPlayer);
+    for(let vi of valid){
+      let v=game.grid.vertices[vi];
+      ctx.beginPath();
+      ctx.arc(v.x,v.y,12,0,Math.PI*2);
+      ctx.fillStyle=vi===hoverVertex?'rgba(255,200,0,0.7)':'rgba(255,200,0,0.3)';
+      ctx.fill();
+    }
+  }
+  if(buildMode==='robber'){
+    for(let hi=0;hi<game.grid.hexes.length;hi++){
+      if(game.grid.hexes[hi].hasRobber) continue;
+      if(game.grid.hexes[hi].terrain===TERRAIN.DESERT&&game.grid.hexes[hi].hasRobber) continue;
+      let c=game.grid.hexCenters[hi];
+      if(hi===hoverHex){
+        ctx.beginPath();
+        for(let i=0;i<6;i++){
+          let corner=game.grid.hexCorner(c.x,c.y,i);
+          if(i===0) ctx.moveTo(corner.x,corner.y);
+          else ctx.lineTo(corner.x,corner.y);
+        }
+        ctx.closePath();
+        ctx.fillStyle='rgba(255,0,0,0.25)';
+        ctx.fill();
+      }
+    }
+  }
+}
+
+// === UI UPDATES ===
+function updateUI(){
+  updatePlayerPanels();
+  updateResourcePanel();
+  updateMessageLog();
+}
+
+function updatePlayerPanels(){
+  let html='';
+  for(let i=0;i<4;i++){
+    let p=game.players[i];
+    let active=i===game.currentPlayer&&game.phase!=='gameover'?' active':'';
+    let borderColor=PLAYER_COLORS[i];
+    html+=`<div class="player-panel panel${active}" style="border-left-color:${borderColor}">`;
+    html+=`<span class="name" style="color:${borderColor}">${p.name}</span>`;
+    html+=`<span class="vp">${p.vp}VP</span>`;
+    html+=`<div style="font-size:10px;color:#aaa;clear:both;">`;
+    if(i===0){
+      html+=`🃏${p.devCards.length} `;
+    } else {
+      html+=`🃏${p.devCards.length} 💳${game.totalResources(i)} `;
+    }
+    html+=`🛤${p.roads.length} 🏠${p.settlements.length} 🏙${p.cities.length}`;
+    if(p.hasLongestRoad) html+=` <span style="color:#ff0;">🛤最長</span>`;
+    if(p.hasLargestArmy) html+=` <span style="color:#f80;">⚔最大</span>`;
+    html+=` ⚔${p.knightsPlayed}`;
+    html+=`</div>`;
+    if(i===0){
+      html+=`<div class="res-row">`;
+      for(let ri=0;ri<5;ri++){
+        let k=RES_KEYS[ri];
+        html+=`<span class="res-badge" style="background:${RES_COLORS[ri]};color:#fff;">${RES_NAMES[ri].charAt(0)}${p.resources[k]}</span>`;
+      }
+      html+=`</div>`;
+    }
+    html+=`</div>`;
+  }
+  document.getElementById('player-panels').innerHTML=html;
+}
+
+function updateResourcePanel(){
+  let panel=document.getElementById('resource-panel');
+  if(game.phase==='gameover'||!game.players[0].isHuman){
+    panel.style.display='none';
+    return;
+  }
+  panel.style.display='block';
+  let p=game.players[0];
+  let html='<div style="font-size:12px;font-weight:bold;margin-bottom:4px;">あなたの資源</div>';
+  for(let ri=0;ri<5;ri++){
+    let k=RES_KEYS[ri];
+    let rate=p.tradeRates[k];
+    html+=`<div style="display:flex;align-items:center;gap:4px;margin:2px 0;">`;
+    html+=`<span class="res-icon" style="background:${RES_COLORS[ri]}"></span>`;
+    html+=`<span style="flex:1;font-size:11px;">${RES_NAMES[ri]}</span>`;
+    html+=`<span style="font-size:13px;font-weight:bold;">${p.resources[k]}</span>`;
+    html+=`<span style="font-size:9px;color:#888;">(${rate}:1)</span>`;
+    html+=`</div>`;
+  }
+  html+=`<div style="margin-top:4px;font-size:10px;color:#aaa;">発展カード: ${p.devCards.length}枚</div>`;
+  panel.innerHTML=html;
+}
+
+function updateDiceDisplay(){
+  document.getElementById('dice-display').style.display='block';
+  document.getElementById('d1').textContent=game.diceRoll[0]||'?';
+  document.getElementById('d2').textContent=game.diceRoll[1]||'?';
+  document.getElementById('dice-total').textContent=`合計: ${game.diceTotal||'-'}`;
+}
+
+function updateMessageLog(){
+  messageLogEl.style.display='block';
+  let html='';
+  let msgs=game.messages.slice(-15);
+  for(let m of msgs){
+    html+=`<div>${m}</div>`;
+  }
+  messageLogEl.innerHTML=html;
+  messageLogEl.scrollTop=messageLogEl.scrollHeight;
+}
+
+function setStatus(text){
+  document.getElementById('status-text').textContent=text;
+}
+
+function setActionButtons(buttons){
+  let panel=document.getElementById('action-panel');
+  panel.innerHTML='';
+  for(let b of buttons){
+    let btn=document.createElement('button');
+    btn.className='btn '+(b.cls||'');
+    btn.textContent=b.text;
+    btn.disabled=!!b.disabled;
+    btn.onclick=b.onclick;
+    panel.appendChild(btn);
+  }
+}
+
+function clearActions(){
+  document.getElementById('action-panel').innerHTML='';
+}
+
+// === MOUSE/TOUCH HANDLING ===
+function getGamePos(clientX,clientY){
+  return {x:clientX-offsetX,y:clientY-offsetY};
+}
+
+function findNearestVertex(gx,gy,maxDist=18){
+  let best=-1,bestD=maxDist;
+  for(let v of game.grid.vertices){
+    let dx=v.x-gx,dy=v.y-gy;
+    let d=Math.sqrt(dx*dx+dy*dy);
+    if(d<bestD){bestD=d;best=v.idx;}
+  }
+  return best;
+}
+
+function findNearestEdge(gx,gy,maxDist=15){
+  let best=-1,bestD=maxDist;
+  for(let e of game.grid.edges){
+    let v1=game.grid.vertices[e.v1];
+    let v2=game.grid.vertices[e.v2];
+    let mx=(v1.x+v2.x)/2,my=(v1.y+v2.y)/2;
+    let d=Math.sqrt((gx-mx)**2+(gy-my)**2);
+    if(d<bestD){bestD=d;best=e.idx;}
+  }
+  return best;
+}
+
+function findHex(gx,gy){
+  let best=-1,bestD=HEX_SIZE*1.2;
+  for(let hi=0;hi<game.grid.hexCenters.length;hi++){
+    let c=game.grid.hexCenters[hi];
+    let d=Math.sqrt((gx-c.x)**2+(gy-c.y)**2);
+    if(d<bestD){bestD=d;best=hi;}
+  }
+  return best;
+}
+
+canvas=document.getElementById('gameCanvas');
+canvas.addEventListener('mousemove',(e)=>{
+  if(!game) return;
+  let gp=getGamePos(e.clientX,e.clientY);
+  hoverVertex=findNearestVertex(gp.x,gp.y);
+  hoverEdge=findNearestEdge(gp.x,gp.y);
+  hoverHex=findHex(gp.x,gp.y);
+
+  // Tooltip
+  if(hoverHex>=0&&!buildMode){
+    let hex=game.grid.hexes[hoverHex];
+    let c=game.grid.hexCenters[hoverHex];
+    let sx=c.x+offsetX,sy=c.y+offsetY;
+    let pips=hex.number>0?6-Math.abs(7-hex.number):0;
+    let info=`${TERRAIN_NAMES[hex.terrain]}`;
+    if(hex.number>0) info+=` (${hex.number}/${'●'.repeat(pips)})`;
+    if(hex.hasRobber) info+=' 🚫盗賊';
+    tooltipEl.textContent=info;
+    tooltipEl.style.display='block';
+    tooltipEl.style.left=sx+'px';
+    tooltipEl.style.top=(sy-40)+'px';
+  } else {
+    tooltipEl.style.display='none';
+  }
+
+  render();
+});
+
+canvas.addEventListener('click',(e)=>{
+  if(!game||!buildMode) return;
+  let gp=getGamePos(e.clientX,e.clientY);
+
+  if(buildMode==='settlement'||buildMode==='setup-settlement'){
+    let vi=findNearestVertex(gp.x,gp.y);
+    if(vi>=0){
+      let valid=game.getValidSettlementVertices(game.currentPlayer,game.phase==='setup');
+      if(valid.includes(vi)){
+        resolveClick({type:'vertex',idx:vi});
+      }
+    }
+  }
+  if(buildMode==='road'||buildMode==='setup-road'){
+    let ei=findNearestEdge(gp.x,gp.y);
+    if(ei>=0){
+      let fromV=buildMode==='setup-road'?pendingAction?.fromVertex:-1;
+      let valid=game.getValidRoadEdges(game.currentPlayer,fromV);
+      if(valid.includes(ei)){
+        resolveClick({type:'edge',idx:ei});
+      }
+    }
+  }
+  if(buildMode==='city'){
+    let vi=findNearestVertex(gp.x,gp.y);
+    if(vi>=0){
+      let valid=game.getValidCityVertices(game.currentPlayer);
+      if(valid.includes(vi)){
+        resolveClick({type:'vertex',idx:vi});
+      }
+    }
+  }
+  if(buildMode==='robber'){
+    let hi=findHex(gp.x,gp.y);
+    if(hi>=0&&!game.grid.hexes[hi].hasRobber){
+      resolveClick({type:'hex',idx:hi});
+    }
+  }
+});
+
+// Click resolution
+let clickResolver=null;
+function waitForClick(mode){
+  return new Promise(resolve=>{
+    buildMode=mode;
+    clickResolver=resolve;
+    render();
+  });
+}
+function resolveClick(data){
+  buildMode=null;
+  if(clickResolver){
+    let r=clickResolver;
+    clickResolver=null;
+    r(data);
+  }
+  render();
+}
+
+// === GAME FLOW ===
+async function startGame(){
+  document.getElementById('start-screen').style.display='none';
+  game=new CatanGame(cpuDifficulty);
+  resize();
+  render();
+
+  // Setup phase
+  await setupPhase();
+
+  // Main game loop
+  if(game.phase!=='gameover') game.phase='main';
+  game.turnNumber=1;
+  await mainGameLoop();
+}
+
+async function setupPhase(){
+  game.phase='setup';
+  // Round 1: players 0,1,2,3 place settlement+road
+  // Round 2: players 3,2,1,0 place settlement+road (reverse)
+  let order1=[0,1,2,3];
+  let order2=[3,2,1,0];
+
+  for(let round=1;round<=2;round++){
+    let order=round===1?order1:order2;
+    game.setupRound=round;
+    for(let pi of order){
+      game.currentPlayer=pi;
+      if(pi===0){
+        // Human
+        await humanSetupTurn(round);
+      } else {
+        // CPU
+        await cpuSetupTurn(pi,round);
+      }
+      render();
+      await sleep(200);
+    }
+  }
+}
+
+async function humanSetupTurn(round){
+  setStatus(`初期配置 (ラウンド${round}) - 開拓地を配置してください`);
+  let settlementClick=await waitForClick('setup-settlement');
+  game.placeSettlement(0,settlementClick.idx,true);
+  render();
+
+  setStatus(`初期配置 (ラウンド${round}) - 街道を配置してください`);
+  pendingAction={fromVertex:settlementClick.idx};
+  let roadClick=await waitForClick('setup-road');
+  game.placeRoad(0,roadClick.idx);
+  pendingAction=null;
+  render();
+}
+
+async function cpuSetupTurn(p,round){
+  game.setupRound=round;
+  setStatus(`${game.players[p].name}が初期配置中...`);
+  await sleep(400);
+
+  let ai=new CatanAI(game,p);
+  let vi=ai.chooseSetupSettlement();
+  if(vi>=0){
+    game.placeSettlement(p,vi,true);
+    render();
+    await sleep(300);
+
+    let ei=ai.chooseSetupRoad(vi);
+    if(ei>=0){
+      game.placeRoad(p,ei);
+    }
+  }
+  render();
+}
+
+async function mainGameLoop(){
+  game.currentPlayer=0;
+
+  while(game.phase==='main'){
+    let p=game.currentPlayer;
+    game.players[p].playedDevThisTurn=false;
+
+    if(p===0){
+      await humanTurn();
+    } else {
+      await cpuTurn(p);
+    }
+
+    if(game.phase==='gameover') break;
+
+    // Next player
+    game.currentPlayer=(game.currentPlayer+1)%4;
+    if(game.currentPlayer===0) game.turnNumber++;
+    render();
+  }
+
+  // Game over
+  showGameOver();
+}
+
+async function humanTurn(){
+  setStatus('あなたのターン - サイコロを振ってください');
+  game.turnPhase='pre-roll';
+
+  // Pre-roll: can play knight
+  let rolled=false;
+
+  while(!rolled){
+    let buttons=[{text:'🎲 サイコロを振る',onclick:()=>resolveAction('roll')}];
+
+    // Knight before roll
+    let knightIdx=game.players[0].devCards.findIndex((c,i)=>c.type===DEV.KNIGHT&&game.canPlayDev(0,i));
+    if(knightIdx>=0){
+      buttons.push({text:'⚔ 騎士カード',cls:'btn-dev',onclick:()=>resolveAction('knight-pre')});
+    }
+
+    setActionButtons(buttons);
+    let action=await waitForAction();
+
+    if(action==='knight-pre'){
+      await humanPlayKnight();
+    } else if(action==='roll'){
+      rolled=true;
+    }
+  }
+
+  // Roll dice
+  let total=game.rollDice();
+  updateDiceDisplay();
+  game.log(`あなたがサイコロを振った: ${game.diceRoll[0]}+${game.diceRoll[1]}=${total}`);
+  render();
+
+  if(total===7){
+    // Discard phase
+    for(let i=0;i<4;i++){
+      if(game.totalResources(i)>7){
+        if(i===0){
+          await humanDiscard();
+        } else {
+          let ai=new CatanAI(game,i);
+          ai.cpuDiscard(i,Math.floor(game.totalResources(i)/2));
+        }
+      }
+    }
+    // Human moves robber
+    await humanMoveRobber();
+  } else {
+    game.distributeResources(total);
+  }
+
+  render();
+
+  // Build phase
+  game.turnPhase='build';
+  await humanBuildPhase();
+}
+
+async function humanBuildPhase(){
+  while(true){
+    setStatus('あなたのターン - アクションを選択');
+    let buttons=[];
+    let p=game.players[0];
+
+    // Build options
+    let canRoad=game.canAfford(0,COST.ROAD)&&game.getValidRoadEdges(0).length>0&&p.roads.length<15;
+    let canSettlement=game.canAfford(0,COST.SETTLEMENT)&&game.getValidSettlementVertices(0).length>0&&(p.settlements.length+p.cities.length)<5;
+    let canCity=game.canAfford(0,COST.CITY)&&game.getValidCityVertices(0).length>0;
+    let canDev=game.canAfford(0,COST.DEV_CARD)&&game.devDeck.length>0;
+
+    buttons.push({text:'🛤 街道(🧱1+🪵1)',disabled:!canRoad,onclick:()=>resolveAction('build-road')});
+    buttons.push({text:'🏠 開拓地(🧱🪵🐑🌾)',disabled:!canSettlement,onclick:()=>resolveAction('build-settlement')});
+    buttons.push({text:'🏙 都市(🌾2+⛏3)',disabled:!canCity,onclick:()=>resolveAction('build-city')});
+    buttons.push({text:'🃏 発展カード(🐑🌾⛏)',cls:'btn-dev',disabled:!canDev,onclick:()=>resolveAction('buy-dev')});
+    buttons.push({text:'🔄 銀行交易',cls:'btn-trade',onclick:()=>resolveAction('bank-trade')});
+
+    // Dev card play
+    if(!p.playedDevThisTurn){
+      let playable=p.devCards.some((c,i)=>game.canPlayDev(0,i));
+      if(playable){
+        buttons.push({text:'📜 発展カード使用',cls:'btn-dev',onclick:()=>resolveAction('play-dev')});
+      }
+    }
+
+    buttons.push({text:'⏭ ターン終了',cls:'btn-danger',onclick:()=>resolveAction('end-turn')});
+
+    setActionButtons(buttons);
+    let action=await waitForAction();
+
+    if(action==='end-turn') break;
+
+    if(action==='build-road'){
+      setStatus('街道を配置してください');
+      setActionButtons([{text:'❌ キャンセル',cls:'btn-danger',onclick:()=>resolveClick({type:'cancel'})}]);
+      let click=await waitForClick('road');
+      if(click.type==='edge'){
+        game.payCost(0,COST.ROAD);
+        game.placeRoad(0,click.idx);
+      }
+    }
+    if(action==='build-settlement'){
+      setStatus('開拓地を配置してください');
+      setActionButtons([{text:'❌ キャンセル',cls:'btn-danger',onclick:()=>resolveClick({type:'cancel'})}]);
+      let click=await waitForClick('settlement');
+      if(click.type==='vertex'){
+        game.payCost(0,COST.SETTLEMENT);
+        game.placeSettlement(0,click.idx);
+      }
+    }
+    if(action==='build-city'){
+      setStatus('都市にする開拓地を選択');
+      setActionButtons([{text:'❌ キャンセル',cls:'btn-danger',onclick:()=>resolveClick({type:'cancel'})}]);
+      let click=await waitForClick('city');
+      if(click.type==='vertex'){
+        game.payCost(0,COST.CITY);
+        game.placeCity(0,click.idx);
+      }
+    }
+    if(action==='buy-dev'){
+      game.payCost(0,COST.DEV_CARD);
+      game.buyDevCard(0);
+    }
+    if(action==='bank-trade'){
+      await humanBankTrade();
+    }
+    if(action==='play-dev'){
+      await humanPlayDevCard();
+    }
+
+    render();
+    if(game.phase==='gameover') break;
+  }
+  clearActions();
+}
+
+async function humanBankTrade(){
+  return new Promise(resolve=>{
+    let modal=document.getElementById('trade-modal');
+    let p=game.players[0];
+    let rates=p.tradeRates;
+
+    let html=`<div class="modal-title">🔄 銀行交易</div>`;
+    html+=`<div style="margin-bottom:8px;">`;
+    html+=`<div style="font-size:12px;margin-bottom:6px;"><b>渡す資源:</b></div>`;
+    for(let ri=0;ri<5;ri++){
+      let k=RES_KEYS[ri];
+      let canTrade=p.resources[k]>=rates[k];
+      html+=`<button class="btn ${canTrade?'':'btn-danger'}" style="margin:2px;" ${canTrade?'':'disabled'} onclick="selectGiveResource('${k}')">${RES_NAMES[ri]} (${rates[k]}:1) [所持:${p.resources[k]}]</button>`;
+    }
+    html+=`</div>`;
+    html+=`<div id="trade-give-selected" style="margin:8px 0;font-size:13px;"></div>`;
+    html+=`<div id="trade-want-section" style="display:none;">`;
+    html+=`<div style="font-size:12px;margin-bottom:6px;"><b>欲しい資源:</b></div>`;
+    for(let ri=0;ri<5;ri++){
+      let k=RES_KEYS[ri];
+      html+=`<button class="btn" style="margin:2px;" onclick="selectWantResource('${k}')">${RES_NAMES[ri]}</button>`;
+    }
+    html+=`</div>`;
+    html+=`<div style="margin-top:10px;text-align:center;">`;
+    html+=`<button class="btn btn-danger" onclick="closeTrade()">閉じる</button>`;
+    html+=`</div>`;
+    modal.innerHTML=html;
+    modal.style.display='block';
+
+    window.selectGiveResource=(k)=>{
+      document.getElementById('trade-give-selected').textContent=`${RES_NAMES[RES_KEYS.indexOf(k)]}を${rates[k]}個渡す → `;
+      document.getElementById('trade-want-section').style.display='block';
+      window._tradeGive=k;
+    };
+    window.selectWantResource=(k)=>{
+      let giveK=window._tradeGive;
+      if(!giveK||giveK===k) return;
+      p.resources[giveK]-=rates[giveK];
+      p.resources[k]++;
+      game.log(`あなたが銀行と交易: ${RES_NAMES[RES_KEYS.indexOf(giveK)]}${rates[giveK]}→${RES_NAMES[RES_KEYS.indexOf(k)]}1`);
+      modal.style.display='none';
+      render();
+      resolve();
+    };
+    window.closeTrade=()=>{
+      modal.style.display='none';
+      resolve();
+    };
+  });
+}
+
+async function humanDiscard(){
+  let total=game.totalResources(0);
+  let count=Math.floor(total/2);
+  return new Promise(resolve=>{
+    let modal=document.getElementById('discard-modal');
+    let p=game.players[0];
+    let discarding={brick:0,lumber:0,wool:0,grain:0,ore:0};
+
+    function renderDiscardModal(){
+      let selected=Object.values(discarding).reduce((a,b)=>a+b,0);
+      let html=`<div class="modal-title">⚠️ 資源を${count}枚捨ててください (${selected}/${count})</div>`;
+      for(let ri=0;ri<5;ri++){
+        let k=RES_KEYS[ri];
+        html+=`<div class="trade-row">`;
+        html+=`<span class="res-icon" style="background:${RES_COLORS[ri]}"></span>`;
+        html+=`<span style="flex:1;">${RES_NAMES[ri]}: ${p.resources[k]}枚</span>`;
+        html+=`<button class="btn" onclick="discardChange('${k}',-1)" ${discarding[k]<=0?'disabled':''}>-</button>`;
+        html+=`<span style="width:24px;text-align:center;">${discarding[k]}</span>`;
+        html+=`<button class="btn" onclick="discardChange('${k}',1)" ${discarding[k]>=p.resources[k]||selected>=count?'disabled':''}>+</button>`;
+        html+=`</div>`;
+      }
+      html+=`<div style="text-align:center;margin-top:8px;">`;
+      html+=`<button class="btn" ${selected!==count?'disabled':''} onclick="confirmDiscard()">確定</button>`;
+      html+=`</div>`;
+      modal.innerHTML=html;
+    }
+
+    window.discardChange=(k,delta)=>{
+      discarding[k]+=delta;
+      renderDiscardModal();
+    };
+    window.confirmDiscard=()=>{
+      for(let k of RES_KEYS){
+        p.resources[k]-=discarding[k];
+      }
+      game.log(`あなたが${count}枚の資源を捨てた`);
+      modal.style.display='none';
+      render();
+      resolve();
+    };
+
+    modal.style.display='block';
+    renderDiscardModal();
+  });
+}
+
+async function humanMoveRobber(){
+  setStatus('盗賊を移動させてください');
+  clearActions();
+  let click=await waitForClick('robber');
+  game.moveRobber(click.idx);
+  render();
+
+  // Steal
+  let targets=game.getStealTargets(click.idx,0);
+  if(targets.length>0){
+    if(targets.length===1){
+      game.stealFrom(0,targets[0]);
+    } else {
+      await humanChooseStealTarget(targets);
+    }
+  }
+  render();
+}
+
+async function humanChooseStealTarget(targets){
+  return new Promise(resolve=>{
+    let modal=document.getElementById('steal-modal');
+    let html=`<div class="modal-title">誰から資源を奪いますか？</div>`;
+    for(let t of targets){
+      html+=`<button class="btn" style="display:block;width:100%;margin:4px 0;background:${PLAYER_COLORS[t]}40;border:1px solid ${PLAYER_COLORS[t]}" onclick="stealTarget(${t})">${game.players[t].name} (${game.totalResources(t)}枚)</button>`;
+    }
+    modal.innerHTML=html;
+    modal.style.display='block';
+
+    window.stealTarget=(t)=>{
+      game.stealFrom(0,t);
+      modal.style.display='none';
+      render();
+      resolve();
+    };
+  });
+}
+
+async function humanPlayKnight(){
+  let idx=game.players[0].devCards.findIndex((c,i)=>c.type===DEV.KNIGHT&&game.canPlayDev(0,i));
+  if(idx<0) return;
+  let card=game.players[0].devCards.splice(idx,1)[0];
+  game.players[0].devCardsPlayed.push(card);
+  game.playKnight(0);
+  await humanMoveRobber();
+  render();
+}
+
+async function humanPlayDevCard(){
+  let p=game.players[0];
+  let playable=[];
+  for(let i=0;i<p.devCards.length;i++){
+    if(game.canPlayDev(0,i)) playable.push(i);
+  }
+  if(playable.length===0) return;
+
+  return new Promise(resolve=>{
+    let modal=document.getElementById('trade-modal');
+    let html=`<div class="modal-title">📜 発展カードを使用</div>`;
+    for(let ci of playable){
+      let c=p.devCards[ci];
+      html+=`<button class="btn" style="display:block;width:100%;margin:4px 0;" onclick="useDevCard(${ci})">${DEV_NAMES[c.type]}</button>`;
+    }
+    html+=`<button class="btn btn-danger" style="display:block;width:100%;margin-top:8px;" onclick="cancelDev()">キャンセル</button>`;
+    modal.innerHTML=html;
+    modal.style.display='block';
+
+    window.useDevCard=async(ci)=>{
+      modal.style.display='none';
+      let card=p.devCards[ci];
+
+      if(card.type===DEV.KNIGHT){
+        await humanPlayKnight();
+      } else if(card.type===DEV.ROAD_BUILD){
+        p.devCards.splice(ci,1);
+        p.devCardsPlayed.push({type:DEV.ROAD_BUILD});
+        p.playedDevThisTurn=true;
+        game.log('あなたが街道建設を使用');
+        for(let r=0;r<2;r++){
+          let valid=game.getValidRoadEdges(0);
+          if(valid.length===0) break;
+          setStatus(`街道建設: ${r+1}/2本目の街道を配置`);
+          let click=await waitForClick('road');
+          if(click.type==='edge'){
+            game.placeRoad(0,click.idx);
+          }
+          render();
+        }
+      } else if(card.type===DEV.YEAR_PLENTY){
+        p.devCards.splice(ci,1);
+        p.devCardsPlayed.push({type:DEV.YEAR_PLENTY});
+        p.playedDevThisTurn=true;
+        await humanYearOfPlenty();
+      } else if(card.type===DEV.MONOPOLY){
+        p.devCards.splice(ci,1);
+        p.devCardsPlayed.push({type:DEV.MONOPOLY});
+        p.playedDevThisTurn=true;
+        await humanMonopoly();
+      }
+      render();
+      resolve();
+    };
+    window.cancelDev=()=>{
+      modal.style.display='none';
+      resolve();
+    };
+  });
+}
+
+async function humanYearOfPlenty(){
+  let chosen=[];
+  for(let pick=0;pick<2;pick++){
+    await new Promise(resolve=>{
+      let modal=document.getElementById('yop-modal');
+      let html=`<div class="modal-title">収穫: ${pick+1}/2 資源を選択</div>`;
+      for(let ri=0;ri<5;ri++){
+        let k=RES_KEYS[ri];
+        html+=`<button class="btn" style="margin:4px;" onclick="yopPick('${k}')">${RES_NAMES[ri]}</button>`;
+      }
+      modal.innerHTML=html;
+      modal.style.display='block';
+
+      window.yopPick=(k)=>{
+        game.players[0].resources[k]++;
+        chosen.push(k);
+        modal.style.display='none';
+        resolve();
+      };
+    });
+  }
+  game.log(`あなたが収穫を使用: ${chosen.map(k=>RES_NAMES[RES_KEYS.indexOf(k)]).join(',')}`);
+}
+
+async function humanMonopoly(){
+  await new Promise(resolve=>{
+    let modal=document.getElementById('monopoly-modal');
+    let html=`<div class="modal-title">独占: 宣言する資源を選択</div>`;
+    for(let ri=0;ri<5;ri++){
+      let k=RES_KEYS[ri];
+      html+=`<button class="btn" style="margin:4px;background:${RES_COLORS[ri]}" onclick="monopolyPick('${k}')">${RES_NAMES[ri]}</button>`;
+    }
+    modal.innerHTML=html;
+    modal.style.display='block';
+
+    window.monopolyPick=(k)=>{
+      let stolen=0;
+      for(let j=1;j<4;j++){
+        stolen+=game.players[j].resources[k];
+        game.players[j].resources[k]=0;
+      }
+      game.players[0].resources[k]+=stolen;
+      game.log(`あなたが独占を使用: ${RES_NAMES[RES_KEYS.indexOf(k)]}を${stolen}枚獲得`);
+      modal.style.display='none';
+      resolve();
+    };
+  });
+}
+
+async function waitForHumanDiscard(p){
+  if(p!==0) return;
+  await humanDiscard();
+}
+
+async function cpuTurn(p){
+  setStatus(`${game.players[p].name}のターン...`);
+  clearActions();
+  await sleep(400);
+
+  let ai=new CatanAI(game,p);
+  await ai.takeTurn();
+  render();
+
+  if(game.phase==='gameover') return;
+  await sleep(300);
+}
+
+// Action resolution
+let actionResolver=null;
+function waitForAction(){
+  return new Promise(resolve=>{
+    actionResolver=resolve;
+  });
+}
+function resolveAction(action){
+  if(actionResolver){
+    let r=actionResolver;
+    actionResolver=null;
+    r(action);
+  }
+}
+
+function showGameOver(){
+  setStatus(game.winner===0?'🎉 あなたの勝利！':'😔 '+game.players[game.winner].name+'の勝利...');
+  setActionButtons([
+    {text:'🔄 もう一度プレイ',onclick:()=>location.reload()},
+  ]);
+}
+
+// === UTILITIES ===
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){
+    let j=Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]]=[arr[j],arr[i]];
+  }
+  return arr;
+}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// === INIT ===
+function init(){
+  initCanvas();
+
+  // Difficulty selection
+  let diffBtns=document.querySelectorAll('.diff-btn');
+  diffBtns.forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      diffBtns.forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedDiff=parseInt(btn.dataset.diff);
+    });
+  });
+
+  document.getElementById('start-btn').addEventListener('click',()=>{
+    cpuDifficulty=selectedDiff;
+    startGame();
+  });
+
+  // Render loop
+  function loop(){
+    render();
+    animFrame=requestAnimationFrame(loop);
+  }
+  loop();
+}
+
+init();
+</script>
+</body>
+</html>
