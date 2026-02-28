@@ -1747,22 +1747,33 @@ canvas.addEventListener('wheel',(e)=>{
   applyZoom(scale*delta,e.clientX,e.clientY);
 },{passive:false});
 
+// ドラッグ/クリック判定
+let dragMoved=false;
+const DRAG_THRESHOLD=5;
+let mouseDownX=0,mouseDownY=0;
+
 canvas.addEventListener('mousedown',(e)=>{
-  if(e.button===1||(e.button===0&&e.altKey)){
+  if(e.button===0||e.button===1){
+    mouseDownX=e.clientX;
+    mouseDownY=e.clientY;
+    dragMoved=false;
     isDragging=true;
     dragStartX=e.clientX-offsetX;
     dragStartY=e.clientY-offsetY;
-    canvas.style.cursor='grabbing';
-    e.preventDefault();
+    if(e.button===1) e.preventDefault();
   }
 });
 
-canvas.addEventListener('mouseup',()=>{
-  if(isDragging){isDragging=false;canvas.style.cursor='';}
+canvas.addEventListener('mouseup',(e)=>{
+  if(isDragging){
+    isDragging=false;
+    canvas.style.cursor='';
+    dragMoved=false;
+  }
 });
 
 canvas.addEventListener('mouseleave',()=>{
-  if(isDragging){isDragging=false;canvas.style.cursor='';}
+  if(isDragging){isDragging=false;dragMoved=false;canvas.style.cursor='';}
 });
 
 let touchStartDist=0,touchStartScale=1,touchStartMidX=0,touchStartMidY=0;
@@ -1798,9 +1809,17 @@ canvas.addEventListener('touchmove',(e)=>{
 
 canvas.addEventListener('mousemove',(e)=>{
   if(isDragging){
-    offsetX=e.clientX-dragStartX;
-    offsetY=e.clientY-dragStartY;
-    render();
+    const dx=e.clientX-mouseDownX;
+    const dy=e.clientY-mouseDownY;
+    if(!dragMoved&&(Math.abs(dx)>DRAG_THRESHOLD||Math.abs(dy)>DRAG_THRESHOLD)){
+      dragMoved=true;
+      canvas.style.cursor='grabbing';
+    }
+    if(dragMoved){
+      offsetX=e.clientX-dragStartX;
+      offsetY=e.clientY-dragStartY;
+      render();
+    }
     return;
   }
   if(!game) return;
@@ -1830,6 +1849,7 @@ canvas.addEventListener('mousemove',(e)=>{
 });
 
 canvas.addEventListener('click',(e)=>{
+  if(dragMoved) return;
   if(!game||!buildMode) return;
   let gp=getGamePos(e.clientX,e.clientY);
 
