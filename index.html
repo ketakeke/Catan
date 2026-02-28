@@ -1334,23 +1334,92 @@ function render(){
 }
 
 function drawOcean(){
-  // Draw ocean background around the board
-  ctx.fillStyle='#1a4a7a';
   let cx=0,cy=0;
   for(let c of game.grid.hexCenters){cx+=c.x;cy+=c.y;}
   cx/=game.grid.hexCenters.length;
   cy/=game.grid.hexCenters.length;
+  let r=HEX_SIZE*5.8;
+  let grd=ctx.createRadialGradient(cx,cy,r*0.2,cx,cy,r);
+  grd.addColorStop(0,'#1a6aaa');
+  grd.addColorStop(0.5,'#1a5a94');
+  grd.addColorStop(1,'#0d3a6a');
+  ctx.fillStyle=grd;
   ctx.beginPath();
-  ctx.arc(cx,cy,HEX_SIZE*5.5,0,Math.PI*2);
+  ctx.arc(cx,cy,r,0,Math.PI*2);
   ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.06)';
+  ctx.lineWidth=2;
+  for(let i=1;i<4;i++){
+    ctx.beginPath();
+    ctx.arc(cx,cy,r*0.25*i,0,Math.PI*2);
+    ctx.stroke();
+  }
+}
+
+function drawHexTerrain(cx,cy,terrain){
+  const S=HEX_SIZE;
+  const gradients=[
+    ['#d4714a','#c25930','#a03d1a'],
+    ['#2d8a2d','#1f6a1f','#145014'],
+    ['#7ece7e','#5ab85a','#3a9a3a'],
+    ['#f0d060','#d4b030','#b89020'],
+    ['#9090b8','#707098','#505080'],
+    ['#e8d8a0','#d4c070','#c0a850']
+  ];
+  const cols=gradients[terrain]||['#888','#666','#444'];
+  let grd=ctx.createRadialGradient(cx-S*0.2,cy-S*0.3,S*0.05,cx,cy,S*1.05);
+  grd.addColorStop(0,cols[0]);
+  grd.addColorStop(0.6,cols[1]);
+  grd.addColorStop(1,cols[2]);
+  ctx.fillStyle=grd;
+}
+
+function drawTerrainSymbols(cx,cy,terrain){
+  const S=HEX_SIZE;
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.save();
+  if(terrain===1){
+    ctx.font=Math.round(S*0.55)+'px sans-serif';
+    ctx.fillText('🌲',cx-S*0.28,cy-S*0.05);
+    ctx.font=Math.round(S*0.45)+'px sans-serif';
+    ctx.fillText('🌲',cx+S*0.22,cy+S*0.12);
+    ctx.font=Math.round(S*0.38)+'px sans-serif';
+    ctx.fillText('🌲',cx-S*0.05,cy+S*0.25);
+  } else if(terrain===2){
+    ctx.font=Math.round(S*0.5)+'px sans-serif';
+    ctx.fillText('🐑',cx-S*0.15,cy-S*0.08);
+    ctx.font=Math.round(S*0.38)+'px sans-serif';
+    ctx.fillText('🐑',cx+S*0.2,cy+S*0.18);
+  } else if(terrain===3){
+    ctx.font=Math.round(S*0.48)+'px sans-serif';
+    ctx.fillText('🌾',cx-S*0.2,cy-S*0.05);
+    ctx.fillText('🌾',cx+S*0.2,cy-S*0.05);
+    ctx.font=Math.round(S*0.38)+'px sans-serif';
+    ctx.fillText('🌾',cx,cy+S*0.22);
+  } else if(terrain===4){
+    ctx.font=Math.round(S*0.58)+'px sans-serif';
+    ctx.fillText('⛰️',cx,cy-S*0.05);
+  } else if(terrain===5){
+    ctx.font=Math.round(S*0.52)+'px sans-serif';
+    ctx.fillText('🏜️',cx,cy-S*0.05);
+  } else if(terrain===0){
+    ctx.fillStyle='rgba(140,50,10,0.5)';
+    const bricks=[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]];
+    for(let b of bricks){
+      ctx.fillRect(cx+b[0]*9-7,cy+b[1]*8-4,14,7);
+    }
+  }
+  ctx.restore();
 }
 
 function drawHexes(){
   for(let hi=0;hi<game.grid.hexes.length;hi++){
     let hex=game.grid.hexes[hi];
     let c=game.grid.hexCenters[hi];
+    const S=HEX_SIZE;
 
-    // Draw hex
+    ctx.save();
     ctx.beginPath();
     for(let i=0;i<6;i++){
       let corner=game.grid.hexCorner(c.x,c.y,i);
@@ -1358,51 +1427,79 @@ function drawHexes(){
       else ctx.lineTo(corner.x,corner.y);
     }
     ctx.closePath();
-    ctx.fillStyle=TERRAIN_COLORS[hex.terrain];
+    ctx.clip();
+    drawHexTerrain(c.x,c.y,hex.terrain);
     ctx.fill();
-    ctx.strokeStyle='#333';
-    ctx.lineWidth=1.5;
+    ctx.restore();
+
+    ctx.beginPath();
+    for(let i=0;i<6;i++){
+      let corner=game.grid.hexCorner(c.x,c.y,i);
+      if(i===0) ctx.moveTo(corner.x,corner.y);
+      else ctx.lineTo(corner.x,corner.y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle='rgba(0,0,0,0.5)';
+    ctx.lineWidth=2;
     ctx.stroke();
 
-    // Highlight on hover
+    ctx.beginPath();
+    for(let i=0;i<6;i++){
+      let corner=game.grid.hexCorner(c.x,c.y,i);
+      let hx=c.x+(corner.x-c.x)*0.88;
+      let hy=c.y+(corner.y-c.y)*0.88;
+      if(i===0) ctx.moveTo(hx,hy);
+      else ctx.lineTo(hx,hy);
+    }
+    ctx.closePath();
+    ctx.strokeStyle='rgba(255,255,255,0.18)';
+    ctx.lineWidth=1;
+    ctx.stroke();
+
+    drawTerrainSymbols(c.x,c.y,hex.terrain);
+
     if(hoverHex===hi&&buildMode==='robber'){
-      ctx.fillStyle='rgba(255,0,0,0.3)';
+      ctx.beginPath();
+      for(let i=0;i<6;i++){
+        let corner=game.grid.hexCorner(c.x,c.y,i);
+        if(i===0) ctx.moveTo(corner.x,corner.y);
+        else ctx.lineTo(corner.x,corner.y);
+      }
+      ctx.closePath();
+      ctx.fillStyle='rgba(255,50,50,0.35)';
       ctx.fill();
     }
 
-    // Draw number token
     if(hex.number>0){
+      const isHot=hex.number===6||hex.number===8;
+      ctx.shadowColor='rgba(0,0,0,0.4)';
+      ctx.shadowBlur=6;
+      ctx.shadowOffsetY=2;
       ctx.beginPath();
-      ctx.arc(c.x,c.y,15,0,Math.PI*2);
-      ctx.fillStyle='#f5e6c8';
+      ctx.arc(c.x,c.y,17,0,Math.PI*2);
+      ctx.fillStyle=isHot?'#fff8e8':'#fffdf5';
       ctx.fill();
-      ctx.strokeStyle='#333';
-      ctx.lineWidth=1;
+      ctx.shadowColor='transparent';
+      ctx.shadowBlur=0;
+      ctx.shadowOffsetY=0;
+      ctx.strokeStyle=isHot?'#c00':'#555';
+      ctx.lineWidth=1.5;
       ctx.stroke();
-
-      ctx.fillStyle=(hex.number===6||hex.number===8)?'#c00':'#333';
-      ctx.font=(hex.number===6||hex.number===8)?'bold 14px sans-serif':'13px sans-serif';
+      ctx.fillStyle=isHot?'#b00':'#222';
+      ctx.font=isHot?'bold 15px sans-serif':'bold 14px sans-serif';
       ctx.textAlign='center';
       ctx.textBaseline='middle';
-      ctx.fillText(hex.number,c.x,c.y-1);
-
-      // Dots (pips)
+      ctx.fillText(hex.number,c.x,c.y-1.5);
       let pips=6-Math.abs(7-hex.number);
-      ctx.fillStyle=(hex.number===6||hex.number===8)?'#c00':'#666';
+      ctx.fillStyle=isHot?'#c00':'#555';
       let dotY=c.y+10;
-      let dotStartX=c.x-(pips-1)*3;
+      let dotStartX=c.x-(pips-1)*3.5;
       for(let d=0;d<pips;d++){
         ctx.beginPath();
-        ctx.arc(dotStartX+d*6,dotY,1.5,0,Math.PI*2);
+        ctx.arc(dotStartX+d*7,dotY,2,0,Math.PI*2);
         ctx.fill();
       }
     }
-
-    // Terrain icon/label
-    ctx.fillStyle='rgba(255,255,255,0.5)';
-    ctx.font='9px sans-serif';
-    ctx.textAlign='center';
-    ctx.fillText(TERRAIN_NAMES[hex.terrain],c.x,c.y+25);
   }
 }
 
