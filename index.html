@@ -1374,40 +1374,42 @@ function drawHexTerrain(cx,cy,terrain){
   ctx.fillStyle=grd;
 }
 
-function drawTerrainSymbols(cx,cy,terrain){
+function drawTerrainSymbols(cx,cy,terrain,hasNumber){
   const S=HEX_SIZE;
+  const yOff=hasNumber?-S*0.38:-S*0.05; // move up if has number token
   ctx.textAlign='center';
   ctx.textBaseline='middle';
   ctx.save();
-  if(terrain===1){
-    ctx.font=Math.round(S*0.55)+'px sans-serif';
-    ctx.fillText('🌲',cx-S*0.28,cy-S*0.05);
-    ctx.font=Math.round(S*0.45)+'px sans-serif';
-    ctx.fillText('🌲',cx+S*0.22,cy+S*0.12);
-    ctx.font=Math.round(S*0.38)+'px sans-serif';
-    ctx.fillText('🌲',cx-S*0.05,cy+S*0.25);
-  } else if(terrain===2){
-    ctx.font=Math.round(S*0.5)+'px sans-serif';
-    ctx.fillText('🐑',cx-S*0.15,cy-S*0.08);
-    ctx.font=Math.round(S*0.38)+'px sans-serif';
-    ctx.fillText('🐑',cx+S*0.2,cy+S*0.18);
-  } else if(terrain===3){
+  if(terrain===1){ // Forest: trees arranged in upper area
+    ctx.font=Math.round(S*0.44)+'px sans-serif';
+    ctx.fillText('🌲',cx-S*0.25,cy+yOff-S*0.05);
+    ctx.font=Math.round(S*0.36)+'px sans-serif';
+    ctx.fillText('🌲',cx+S*0.2,cy+yOff+S*0.1);
+    ctx.font=Math.round(S*0.3)+'px sans-serif';
+    ctx.fillText('🌲',cx-S*0.0,cy+yOff+S*0.2);
+  } else if(terrain===2){ // Pasture: sheep
+    ctx.font=Math.round(S*0.42)+'px sans-serif';
+    ctx.fillText('🐑',cx-S*0.18,cy+yOff);
+    ctx.font=Math.round(S*0.3)+'px sans-serif';
+    ctx.fillText('🐑',cx+S*0.22,cy+yOff+S*0.15);
+  } else if(terrain===3){ // Fields: wheat
+    ctx.font=Math.round(S*0.4)+'px sans-serif';
+    ctx.fillText('🌾',cx-S*0.22,cy+yOff);
+    ctx.fillText('🌾',cx+S*0.22,cy+yOff);
+    ctx.font=Math.round(S*0.32)+'px sans-serif';
+    ctx.fillText('🌾',cx,cy+yOff+S*0.2);
+  } else if(terrain===4){ // Mountains: mountain
     ctx.font=Math.round(S*0.48)+'px sans-serif';
-    ctx.fillText('🌾',cx-S*0.2,cy-S*0.05);
-    ctx.fillText('🌾',cx+S*0.2,cy-S*0.05);
-    ctx.font=Math.round(S*0.38)+'px sans-serif';
-    ctx.fillText('🌾',cx,cy+S*0.22);
-  } else if(terrain===4){
-    ctx.font=Math.round(S*0.58)+'px sans-serif';
-    ctx.fillText('⛰️',cx,cy-S*0.05);
-  } else if(terrain===5){
+    ctx.fillText('⛰️',cx,cy+yOff);
+  } else if(terrain===5){ // Desert: no number, center
     ctx.font=Math.round(S*0.52)+'px sans-serif';
-    ctx.fillText('🏜️',cx,cy-S*0.05);
-  } else if(terrain===0){
+    ctx.fillText('🏜️',cx,cy);
+  } else if(terrain===0){ // Hills: brick texture
     ctx.fillStyle='rgba(140,50,10,0.5)';
+    const yb=cy+yOff;
     const bricks=[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]];
     for(let b of bricks){
-      ctx.fillRect(cx+b[0]*9-7,cy+b[1]*8-4,14,7);
+      ctx.fillRect(cx+b[0]*9-7,yb+b[1]*7-3,14,6);
     }
   }
   ctx.restore();
@@ -1456,7 +1458,7 @@ function drawHexes(){
     ctx.lineWidth=1;
     ctx.stroke();
 
-    drawTerrainSymbols(c.x,c.y,hex.terrain);
+    drawTerrainSymbols(c.x,c.y,hex.terrain,hex.number>0);
 
     if(hoverHex===hi&&buildMode==='robber'){
       ctx.beginPath();
